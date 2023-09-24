@@ -146,7 +146,7 @@ export class IAPlayer extends UIElement {
             //boxSizing: 'border-box'
         });
         this.sceneText = document.createElement('div');
-        this.sceneText.innerText = 'Interactive Audio Engine';
+        //this.sceneText.innerText = 'Interactive Audio Engine';
         this.applyStyles(this.sceneText, {
             width: `${this.sceneGlassWidth - 2}px`,
             fontFamily: 'Consolas, monospace',
@@ -174,8 +174,17 @@ export class IAPlayer extends UIElement {
         //this.progressText.innerText = '--:--';
         this.progressText.innerText = '01:35';
     }
-    setTitleText(newText) {this.titleText.innerText = newText;}
-    setSceneText(newText) {this.sceneText.innerText = newText;}
+    setTitleText(newText) {
+        const cleanedText = this.cleanText(newText);
+        this.titleText.innerText = cleanedText;
+    }
+    setSceneText(newText) {
+        const cleanedText = this.cleanText(newText);
+        this.sceneText.innerText = cleanedText;
+    }
+    cleanText(text) {
+        return text.replace(/\n/g, ''); // Replace carriage returns with nothing
+    }
 }
 
 class ResetButton extends RectButton {
