@@ -64,7 +64,7 @@ export class IAEngine extends UIElement {
     }
     static verifyPrompt(prompt, script) {
         if (prompt.hasAttribute(IAEngine.ATTRIBUTE_FILE)) {
-            console.log(`Verified: ${prompt.outerHTML}`);
+            console.log(`    ${prompt.outerHTML}`);
             return prompt;
         } else {
             const promptID = prompt.getAttribute(IAEngine.ATTRIBUTE_PROMPT_ID);
@@ -171,22 +171,22 @@ export class IAEngine extends UIElement {
             } else throw new Error(`${choicePrefix} does not have any <${IAEngine.ELEMENT_GOTO}> children nor does it have "${IAEngine.ATTRIBUTE_CHOICE_ID}", "${$IAEngine.ATTRIBUTE_NODE_ID}", and "${IAEngine.ATTRIBUTE_SCENE_ID}" reference attributes.`);
         }
     }
-    static verifyGoto(goto, script) { // Verify the goto, which may have a parent that is a node or a choice
+    static verifyGoto(goto, indent, script) { // Verify the goto, which may have a parent that is a node or a choice
         const gotoID = goto.getAttribute(IAEngine.ATTRIBUTE_GOTO_ID);
         const nodeID = goto.getAttribute(IAEngine.ATTRIBUTE_NODE_ID);
         const sceneID = goto.getAttribute(IAEngine.ATTRIBUTE_SCENE_ID);
         if (!gotoID && (nodeID || sceneID)) {
-            console.log(`Verified: ${goto.outerHTML}`);
+            console.log(`${indent}${goto.outerHTML}`);
             return goto;
         } else {
             const gotoPrefix = `Goto "${goto.getAttribute(IAEngine.ATTRIBUTE_ID)}"`;
             if (gotoID && nodeID && sceneID) {
                 console.log(`${gotoPrefix} attempting to reference another <${IAEngine.ELEMENT_GOTO}> with ${IAEngine.ATTRIBUTE_GOTO_ID}="${gotoID}", ${IAEngine.ATTRIBUTE_NODE_ID}="${nodeID}", and ${IAEngine.ATTRIBUTE_SCENE_ID}="${sceneID}"...`);
-                const parent = IAEngine.getNodeFromString(nodeID, sceneID, script);
+                const targetParent = IAEngine.getNodeFromString(nodeID, sceneID, script);
                 const choiceID = goto.getAttribute(IAEngine.ATTRIBUTE_CHOICE_ID);
-                if (choiceID) parent = IAEngine.getChildElement(choiceID, IAEngine.ELEMENT_CHOICE, parent);
-                goto = IAEngine.getChildElement(gotoID, IAEngine.ELEMENT_GOTO, parent);
-                return this.verifyGoto(goto, script);
+                if (choiceID) targetParent = IAEngine.getChildElement(choiceID, IAEngine.ELEMENT_CHOICE, targetParent);
+                goto = IAEngine.getChildElement(gotoID, IAEngine.ELEMENT_GOTO, targetParent);
+                return this.verifyGoto(goto, sourceParent, script);
             } else if (gotoID && !(nodeID && sceneID)) throw new Error(`${gotoPrefix}'s reference was invalid because it does not have a "${IAEngine.ATTRIBUTE_NODE_ID}", "${IAEngine.ATTRIBUTE_SCENE_ID}", or both.`);
             else throw new Error(`${gotoPrefix} is invalid.`);
         }
@@ -226,9 +226,11 @@ export class IAEngine extends UIElement {
         }
     }
 
-    constructor() {
+    constructor(projectName) {
         super();
+        this.projectName = projectName;
         this.player = new IAPlayer();
+        this.player.playButton.upFunction = this.playPromptAudio;
         this.appendChild(this.player);
         this.script = null;
         this.variables = new Variables();
@@ -236,8 +238,11 @@ export class IAEngine extends UIElement {
         this.nextNodeName = null;
         this.currentScene = null;
         this.currentNode = null;
-        this.promptsArray = [];
-        this.choicesArray = [];
+        this.promptArray = [];
+        this.audioArray = [];
+        this.choiceArray = [];
+        this.downloadSize = 0;
+        this.firstAudio = true;
     }
     exec() {
         this.addEventListener(this.#LOAD_SCRIPT,this.onLoadScript);
@@ -303,7 +308,7 @@ export class IAEngine extends UIElement {
         this.removeEventListener(this.END_SCENE,this.gotoScene);
         this.currentScene = IAEngine.getScene(this.nextSceneName, this.script);
         this.player.setSceneText(this.getSceneText(this.currentScene));
-        console.log(`Scene: ${this.currentScene.getAttribute(IAEngine.ATTRIBUTE_ID)}`);
+        console.log(`<${IAEngine.ELEMENT_SCENE} id="${this.currentScene.getAttribute(IAEngine.ATTRIBUTE_ID)}">`);
         this.gotoNode();
     }
     getSceneText(scene) {
@@ -315,8 +320,9 @@ export class IAEngine extends UIElement {
         if (this.nextNodeName === null) this.nextNodeName = 'default';
         this.currentNode = IAEngine.getNodeFromXML(this.nextNodeName, this.currentScene);
         this.nextNodeName = null;
-        this.promptsArray.length = this.choicesArray.length = 0;
-        console.log(`Node: ${this.currentNode.getAttribute(IAEngine.ATTRIBUTE_ID)}`);
+        this.promptArray.length = this.choiceArray.length = 0;
+        this.downloadSize = 0;
+        console.log(`  <${IAEngine.ELEMENT_NODE} id="${this.currentNode.getAttribute(IAEngine.ATTRIBUTE_ID)}">`);
         this.prepParsePrompt();
     }
     prepParsePrompt() {
@@ -325,11 +331,18 @@ export class IAEngine extends UIElement {
     }
     parsePromptList() {
         const promptList = this.currentNode.querySelectorAll(IAEngine.ELEMENT_PROMPT);
+        console.log(`    Listing ALL <${IAEngine.ELEMENT_PROMPT}> children...`);
         promptList.forEach(prompt => {
             prompt = IAEngine.verifyPrompt(prompt, this.script);
-            if (IAEngine.evaluateXML(prompt, this.script, this.variables)) this.promptsArray.push(prompt);
+            if (IAEngine.evaluateXML(prompt, this.script, this.variables)) this.promptArray.push(prompt);
         });
-        this.parseModifyArray(this.promptsArray);
+        console.log(`    Listing TRUE <${IAEngine.ELEMENT_PROMPT}> children...`);
+        const l = this.promptArray.length;
+        for (let i=0; i<l; i++) {
+            prompt = this.promptArray[i];
+            console.log(`    ${prompt.outerHTML}`);
+        }
+        this.parseModifyArray(this.promptArray);
         this.dispatchEventWith(this.#PARSE_PROMPT);
     }
     parseModifyArray(xmlArray) {
@@ -354,11 +367,82 @@ export class IAEngine extends UIElement {
     }
     onParsePrompt() {
         this.removeEventListener(this.#PARSE_PROMPT, this.onParsePrompt);
-        if (this.promptsArray.length > 0) this.loadPromptAudio();
+        if (this.promptArray.length > 0) this.loadPromptAudio();
         else this.prepParseChoice()
     }
     loadPromptAudio() {
-
+        const responseArray = [];
+        const promiseArray = [];
+        let fileCount = 0;
+        let fileTotal = this.promptArray.length;
+        const indent = '    ';
+        for (const prompt of this.promptArray) {
+            const file = prompt.getAttribute(IAEngine.ATTRIBUTE_FILE);
+            const url = `../../projects/${this.projectName}/audio/${file}`;
+            console.log(`${indent}Fetching file: ${url}`);
+            const promise = fetch(url)
+                .then(response => {
+                    if (response.ok) {
+                        responseArray.push(response);
+                        return response.blob();
+                    } else throw new Error(`${indent}Failed to fetch "${url}".`);
+                })
+                .then(blob => {
+                    const blobUrl = URL.createObjectURL(blob);
+                    const audio = new Audio();
+                    audio.setAttribute(IAEngine.ATTRIBUTE_FILE, file);
+                    audio.src = blobUrl;
+                    audio.addEventListener('loadeddata', loadedAudio);
+                    this.audioArray.push(audio);
+                });
+            promiseArray.push(promise);
+        }
+        Promise.all(promiseArray)
+            .then(() => {
+                for (const response of responseArray) {
+                    const contentLength = Number(response.headers.get('Content-Length'));
+                    this.downloadSize += contentLength;
+                }
+                console.log(`${indent}Total prompt file size: ${this.downloadSize} bytes`);
+                
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        const loadedAudio = (evt) => {
+            const audio = evt.target;
+            audio.removeEventListener('loadeddata', loadedAudio);
+            URL.revokeObjectURL(audio.src);
+            console.log(`${indent}Fully downloaded "${audio.getAttribute(IAEngine.ATTRIBUTE_FILE)}".`);
+            fileCount++;
+            if (fileCount === fileTotal) {
+                responseArray.length = promiseArray.length = 0;
+                if (this.firstAudio) {
+                    this.firstAudio = false;
+                    this.player.playButton.enable();
+                } else this.playPromptAudio();
+            }
+        }
+    }
+    playPromptAudio = () => {
+        let currentIndex = 0;
+        const playNextAudio = () => {
+            if (currentIndex < this.audioArray.length) {
+                const audio = this.audioArray[currentIndex];
+                audio.addEventListener('ended', onAudioEnded);
+                audio.play();
+            } else dispatchAudioCompleteEvent();
+        }
+        const onAudioEnded = () => {
+            const audio = this.audioArray[currentIndex];
+            audio.removeEventListener('ended', onAudioEnded);
+            currentIndex++;
+            playNextAudio();
+        }
+        const dispatchAudioCompleteEvent = () => {
+            
+        }
+        playNextAudio();
     }
     prepParseChoice() {
         this.addEventListener(this.#PARSE_CHOICE, this.onParseChoice);
@@ -368,11 +452,11 @@ export class IAEngine extends UIElement {
     parseChoiceList() {
         const choiceList = this.currentNode.querySelectorAll('choice');
         if (choiceList.length > 0) {
-            choiceList.forEach((choice) => {
+            choiceList.forEach(choice => {
                 choice = IAEngine.verifyChoice(choice, this.script);
-                if (IAEngine.evaluateXML(choice)) this.choicesArray.push(choice);
+                if (IAEngine.evaluateXML(choice)) this.choiceArray.push(choice);
             });
-            if (this.choicesArray.length > 0) {
+            if (this.choiceArray.length > 0) {
                 this.dispatchEventWith(this.#PARSE_CHOICE);
                 return;
             }
@@ -387,18 +471,26 @@ export class IAEngine extends UIElement {
     }
     parseGotoList(xml) {
         const gotoList = xml.querySelectorAll(IAEngine.ELEMENT_GOTO);
-        const elementPrefix = `Element with ${IAEngine.ATTRIBUTE_ID}="${xml.getAttribute(IAEngine.ATTRIBUTE_ID)}"`;
+        const elementPrefix = `Element <${xml.tagName}> with ${IAEngine.ATTRIBUTE_ID}="${xml.getAttribute(IAEngine.ATTRIBUTE_ID)}"`;
+        const indent = xml.tagName === IAEngine.ELEMENT_NODE ? '    ' : '        ';
         if (gotoList.length > 0) {
+            console.log(`${indent}Listing ALL <${IAEngine.ELEMENT_GOTO}> children...`);
+            const gotoArray = [];
+            gotoList.forEach(goto => {
+                gotoArray.push(IAEngine.verifyGoto(goto, indent, this.script));
+            });
+            const l = gotoArray.length;
             let firstTrueGoto;
-            for (let goto of gotoList) {
-                goto = IAEngine.verifyGoto(goto, this.script);
+            for (let i=0; i<l; i++) {
+                const goto = gotoArray[i];
                 if (IAEngine.evaluateXML(goto)) {
                     firstTrueGoto = goto;
                     break;
                 }
             }
+            gotoArray.length = 0;
             if (firstTrueGoto) {
-                console.log(`${elementPrefix} has a true <${IAEngine.ELEMENT_GOTO}>.`);
+                console.log(`${indent}Executing first TRUE <${IAEngine.ELEMENT_GOTO}>...\n${indent}${firstTrueGoto.outerHTML}`);
                 this.parseGoto(firstTrueGoto);
             } else throw new Error(`${elementPrefix} has <${IAEngine.ELEMENT_GOTO}> children, but all of them are false.`);
         } else throw new Error(`${elementPrefix} has no <${IAEngine.ELEMENT_GOTO}> children.`);
