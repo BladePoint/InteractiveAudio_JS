@@ -1,4 +1,5 @@
 import { UIElement } from '../../frameworks/UserInterface_JS/UIElement.js';
+import { AssetLoader } from '../../frameworks/Utilities_JS/AssetLoader.js';
 import { IAPlayer } from './IAPlayer.js';
 
 export class IAEngine extends UIElement {
@@ -28,6 +29,9 @@ export class IAEngine extends UIElement {
     static ELEMENT_CHOICE = 'choice';
     static ELEMENT_GOTO = 'goto';
     static ELEMENT_CONDITION = 'condition';
+    static INDENT_ONE = '    ';
+    static INDENT_TWO = `${IAEngine.INDENT_ONE}${IAEngine.INDENT_ONE}`;
+    static INDENT_THREE = `${IAEngine.INDENT_ONE}${IAEngine.INDENT_ONE}${IAEngine.INDENT_ONE}`;
     static getScene(sceneID, script) {
         const sceneList = script.querySelectorAll(`Scenes ${IAEngine.ELEMENT_SCENE}[id="${sceneID}"]`);
         const l = sceneList.length;
@@ -62,9 +66,19 @@ export class IAEngine extends UIElement {
             else if (l > 1) throw new Error(`${parentPrefix} has children of type <${childType}>, but there is more than one child with id "${childID}".`);
         }
     }
+    static abridgeElement(element, includeTextContent=false, indent='') {
+        const tagName = element.tagName;
+        const attributes = Array.from(element.attributes).map(attr => `${attr.name}="${attr.value}"`).join(' ');
+        const space = attributes === '' ? '' : ' ';
+        const textContent = includeTextContent ? ` ${element.textContent.trim()}` : '';
+        return `${indent}<${tagName}${space}${attributes}>${textContent}`;
+    }
+    static logElement(element, includeTextContent=false, indent='') {
+        console.log(IAEngine.abridgeElement(element, includeTextContent, indent));
+    }
     static verifyPrompt(prompt, script) {
         if (prompt.hasAttribute(IAEngine.ATTRIBUTE_FILE)) {
-            console.log(`    ${prompt.outerHTML}`);
+            IAEngine.logElement(prompt, false, IAEngine.INDENT_TWO);
             return prompt;
         } else {
             const promptID = prompt.getAttribute(IAEngine.ATTRIBUTE_PROMPT_ID);
@@ -80,10 +94,10 @@ export class IAEngine extends UIElement {
         }
     }
     static verifyCondition(condition, script) { // Verify the condition, which may have a parent that is a prompt, choice, or goto.
-        if (condition.hasAttribute(IAEngine.ATTRIBUTE_VAR_ID) && condition.hasAttribute(IAEngine.ATTRIBUTE_OPERATOR) && condition.hasAttribute(IAEngine.ATTRIBUTE_VALUE)) {
-            console.log(`Verified: ${condition.outerHTML}`);
-            return condition;
-        } else {
+        if (condition.hasAttribute(IAEngine.ATTRIBUTE_VAR_ID) &&
+            condition.hasAttribute(IAEngine.ATTRIBUTE_OPERATOR) &&
+            condition.hasAttribute(IAEngine.ATTRIBUTE_VALUE)) return condition;
+        else {
             const conditionID = condition.getAttribute(IAEngine.ATTRIBUTE_CONDITION_ID);
             const nodeID = condition.getAttribute(IAEngine.ATTRIBUTE_NODE_ID);
             const sceneID = condition.getAttribute(IAEngine.ATTRIBUTE_SCENE_ID);
@@ -156,7 +170,7 @@ export class IAEngine extends UIElement {
     static verifyChoice(choice, script) {
         const gotoList = choice.querySelectorAll(IAEngine.ELEMENT_GOTO);
         if (gotoList.length > 0) {
-            console.log(`Verified: ${choice.outerHTML}`);
+            this.logElement(choice, true, IAEngine.INDENT_TWO);
             return choice;
         } else {
             const choiceID = choice.getAttribute(IAEngine.ATTRIBUTE_CHOICE_ID);
@@ -192,46 +206,62 @@ export class IAEngine extends UIElement {
         }
     }
     static evaluateXML(xml, script, variables) {
-        const conditionList = xml.querySelectorAll(IAEngine.ELEMENT_CONDITION);
-        if (conditionList.length > 0) {
-            for (let condition of conditionList) {
-                condition = IAEngine.verifyCondition(condition, script);
-                const varID = condition.getAttribute(IAEngine.ATTRIBUTE_VAR_ID);
-                const operator = condition.getAttribute(IAEngine.ATTRIBUTE_OPERATOR);
-                const value = parseFloat(condition.getAttribute(IAEngine.ATTRIBUTE_VALUE));
-                if (!IAEngine.evaluate(variables, varID, operator, value)) return false;
-            };
+        const conditionArray = Array.from(xml.children).filter(child => {return child.tagName === IAEngine.ELEMENT_CONDITION;});
+        const l = conditionArray.length;
+        for (let i=0; i<l; i++) {
+            let condition = conditionArray[i];
+            condition = IAEngine.verifyCondition(condition, script);
+            const varID = condition.getAttribute(IAEngine.ATTRIBUTE_VAR_ID);
+            const operator = condition.getAttribute(IAEngine.ATTRIBUTE_OPERATOR);
+            const value = parseFloat(condition.getAttribute(IAEngine.ATTRIBUTE_VALUE));
+            if (!IAEngine.evaluate(variables, varID, operator, value, IAEngine.INDENT_THREE)) {
+                console.log(`${IAEngine.INDENT_THREE}${condition.outerHTML} - FALSE`);
+                return false;
+            } else console.log(`${IAEngine.INDENT_THREE}${condition.outerHTML} - TRUE`);
         }
         return true;
     }
-    static evaluate(variables, varID, operator, value) {
+    static evaluate(variables, varID, operator, value, indent) {
         const testValue = variables.getVar(varID);
+        let result;
         switch (operator) {
             case '==':
-                return testValue === value;
+                result = testValue === value;
+                break;
             case '!=':
-                return testValue !== value;
+                result = testValue !== value;
+                break;
             case '<':
-                return testValue < value;
+                result = testValue < value;
+                break;
             case '<=':
-                return testValue <= value;
+                result = testValue <= value;
+                break;
             case '>':
-                return testValue > value;
+                result = testValue > value;
+                break;
             case '>=':
-                return testValue >= value;
+                result = testValue >= value;
+                break;
             case '=':
                 throw new Error(`Operator "=" is invalid. Did you mean "==" instead?`);
             default:
                 throw new Error(`Operator "${operator}" is invalid.`);
         }
+        console.log(`${indent}${varID} = ${testValue}`);
+        return result;
     }
 
     constructor(projectName) {
         super();
         this.projectName = projectName;
         this.player = new IAPlayer();
-        this.player.playButton.upFunction = this.playPromptAudio;
+        this.player.playFunction = this.playPromptAudio;
         this.appendChild(this.player);
+        this.assetLoader = new AssetLoader({
+            requestLogFunction: this.requestLog,
+            progressFunction: this.requestProgress
+        });
         this.script = null;
         this.variables = new Variables();
         this.nextSceneName = null;
@@ -241,7 +271,9 @@ export class IAEngine extends UIElement {
         this.promptArray = [];
         this.audioArray = [];
         this.choiceArray = [];
-        this.downloadSize = 0;
+        this.promptIndex;
+        this.cumulativeTime;
+        this.totalTime;
         this.firstAudio = true;
     }
     exec() {
@@ -308,7 +340,7 @@ export class IAEngine extends UIElement {
         this.removeEventListener(this.END_SCENE,this.gotoScene);
         this.currentScene = IAEngine.getScene(this.nextSceneName, this.script);
         this.player.setSceneText(this.getSceneText(this.currentScene));
-        console.log(`<${IAEngine.ELEMENT_SCENE} id="${this.currentScene.getAttribute(IAEngine.ATTRIBUTE_ID)}">`);
+        IAEngine.logElement(this.currentScene, false);
         this.gotoNode();
     }
     getSceneText(scene) {
@@ -321,9 +353,21 @@ export class IAEngine extends UIElement {
         this.currentNode = IAEngine.getNodeFromXML(this.nextNodeName, this.currentScene);
         this.nextNodeName = null;
         this.promptArray.length = this.choiceArray.length = 0;
-        this.downloadSize = 0;
-        console.log(`  <${IAEngine.ELEMENT_NODE} id="${this.currentNode.getAttribute(IAEngine.ATTRIBUTE_ID)}">`);
+        this.promptIndex = 0;
+        this.disposeAudio();
+        this.cumulativeTime = 0;
+        this.totalTime = 0;
+        this.player.setLoadProgress(0);
+        this.player.setPlayProgress(0);
+        IAEngine.logElement(this.currentNode, false, IAEngine.INDENT_ONE);
         this.prepParsePrompt();
+    }
+    disposeAudio() {
+        this.audioArray.forEach(audio => {
+            URL.revokeObjectURL(audio.src);
+            audio.src = '';
+        });
+        this.audioArray.length = 0;
     }
     prepParsePrompt() {
         this.addEventListener(this.#PARSE_PROMPT,this.onParsePrompt);
@@ -331,18 +375,22 @@ export class IAEngine extends UIElement {
     }
     parsePromptList() {
         const promptList = this.currentNode.querySelectorAll(IAEngine.ELEMENT_PROMPT);
-        console.log(`    Listing ALL <${IAEngine.ELEMENT_PROMPT}> children...`);
-        promptList.forEach(prompt => {
-            prompt = IAEngine.verifyPrompt(prompt, this.script);
-            if (IAEngine.evaluateXML(prompt, this.script, this.variables)) this.promptArray.push(prompt);
-        });
-        console.log(`    Listing TRUE <${IAEngine.ELEMENT_PROMPT}> children...`);
-        const l = this.promptArray.length;
-        for (let i=0; i<l; i++) {
-            prompt = this.promptArray[i];
-            console.log(`    ${prompt.outerHTML}`);
-        }
-        this.parseModifyArray(this.promptArray);
+        if (promptList.length > 0) {
+            console.log(`${IAEngine.INDENT_ONE}Listing ALL <${IAEngine.ELEMENT_PROMPT}> children...`);
+            promptList.forEach(prompt => {
+                prompt = IAEngine.verifyPrompt(prompt, this.script);
+                if (IAEngine.evaluateXML(prompt, this.script, this.variables)) this.promptArray.push(prompt);
+            });
+            const l = this.promptArray.length;
+            if (l > 0 ) {
+                console.log(`${IAEngine.INDENT_ONE}Listing TRUE <${IAEngine.ELEMENT_PROMPT}> children...`);
+                for (let i=0; i<l; i++) {
+                    prompt = this.promptArray[i];
+                    IAEngine.logElement(prompt, true, IAEngine.INDENT_TWO);
+                }
+                this.parseModifyArray(this.promptArray);
+            } else console.log(`${IAEngine.INDENT_ONE}All <${IAEngine.ELEMENT_PROMPT}> children are false!`);
+        } else console.log(`${IAEngine.INDENT_ONE}No <${IAEngine.ELEMENT_PROMPT}> children exist.`);
         this.dispatchEventWith(this.#PARSE_PROMPT);
     }
     parseModifyArray(xmlArray) {
@@ -371,76 +419,80 @@ export class IAEngine extends UIElement {
         else this.prepParseChoice()
     }
     loadPromptAudio() {
-        const responseArray = [];
-        const promiseArray = [];
-        let fileCount = 0;
-        let fileTotal = this.promptArray.length;
-        const indent = '    ';
-        for (const prompt of this.promptArray) {
-            const file = prompt.getAttribute(IAEngine.ATTRIBUTE_FILE);
-            const url = `../../projects/${this.projectName}/audio/${file}`;
-            console.log(`${indent}Fetching file: ${url}`);
-            const promise = fetch(url)
-                .then(response => {
-                    if (response.ok) {
-                        responseArray.push(response);
-                        return response.blob();
-                    } else throw new Error(`${indent}Failed to fetch "${url}".`);
-                })
-                .then(blob => {
-                    const blobUrl = URL.createObjectURL(blob);
-                    const audio = new Audio();
-                    audio.setAttribute(IAEngine.ATTRIBUTE_FILE, file);
-                    audio.src = blobUrl;
-                    audio.addEventListener('loadeddata', loadedAudio);
-                    this.audioArray.push(audio);
-                });
-            promiseArray.push(promise);
+        const fileArray = this.promptArray.map(prompt => {return prompt.getAttribute(IAEngine.ATTRIBUTE_FILE);});
+        const urlArray = fileArray.map(file => {return `../../projects/${this.projectName}/audio/${file}`});
+        this.assetLoader.errorFunction = requestError;
+        this.assetLoader.completeLogFunction = completeLog;
+        this.assetLoader.addEventListener(AssetLoader.COMPLETE, this.processBlobs);
+        this.assetLoader.loadArray(urlArray);
+        function requestError(i) {
+            throw new Error(`${IAEngine.INDENT_ONE}Failed to download "${urlArray[i]}".`);
         }
-        Promise.all(promiseArray)
-            .then(() => {
-                for (const response of responseArray) {
-                    const contentLength = Number(response.headers.get('Content-Length'));
-                    this.downloadSize += contentLength;
-                }
-                console.log(`${indent}Total prompt file size: ${this.downloadSize} bytes`);
-                
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-        const loadedAudio = (evt) => {
-            const audio = evt.target;
-            audio.removeEventListener('loadeddata', loadedAudio);
-            URL.revokeObjectURL(audio.src);
-            console.log(`${indent}Fully downloaded "${audio.getAttribute(IAEngine.ATTRIBUTE_FILE)}".`);
-            fileCount++;
-            if (fileCount === fileTotal) {
-                responseArray.length = promiseArray.length = 0;
-                if (this.firstAudio) {
-                    this.firstAudio = false;
-                    this.player.playButton.enable();
-                } else this.playPromptAudio();
-            }
+        function completeLog(i) {
+            console.log(`${IAEngine.INDENT_ONE}Downloaded file: "${urlArray[i]}".`);
         }
     }
+    processBlobs = () => {
+        this.assetLoader.removeEventListener(AssetLoader.COMPLETE, this.processBlobs);
+        const LOADED_METADATA = 'loadedmetadata';
+        const l = this.assetLoader.blobArray.length;
+        let durationCount = 0;
+        const addDuration = (evt) => {
+            const audio = evt.target;
+            audio.removeEventListener(LOADED_METADATA, addDuration);
+            this.totalTime += audio.duration;
+            durationCount++;
+            if (durationCount === l) {
+                this.player.setProgressTime(0);
+                this.player.setTotalTime(this.totalTime);
+            }
+        }
+        for (let i=0; i<l; i++) {
+            const blob = this.assetLoader.blobArray[i];
+            const blobUrl = URL.createObjectURL(blob);
+            const audio = this.audioArray[i] = new Audio();
+            audio.setAttribute(IAEngine.ATTRIBUTE_FILE, this.promptArray[i].getAttribute(IAEngine.ATTRIBUTE_FILE));
+            audio.addEventListener(LOADED_METADATA, addDuration);
+            audio.src = blobUrl;
+        }
+        this.assetLoader.dispose();
+        if (this.firstAudio) {
+            this.firstAudio = false;
+            this.player.initState();
+        } else this.playPromptAudio();
+    }
+    requestLog(url) {
+        console.log(`${IAEngine.INDENT_ONE}Requesting file: ${url}`);
+    }
+    requestProgress = (percent) => {
+        this.player.setLoadProgress(percent);
+    }
     playPromptAudio = () => {
-        let currentIndex = 0;
         const playNextAudio = () => {
-            if (currentIndex < this.audioArray.length) {
-                const audio = this.audioArray[currentIndex];
+            if (this.promptIndex < this.audioArray.length) {
+                const audio = this.audioArray[this.promptIndex];
+                audio.addEventListener('timeupdate', updateProgress);
                 audio.addEventListener('ended', onAudioEnded);
+                console.log(`${IAEngine.INDENT_ONE}Playing "${audio.getAttribute(IAEngine.ATTRIBUTE_FILE)}".`);
                 audio.play();
             } else dispatchAudioCompleteEvent();
         }
-        const onAudioEnded = () => {
-            const audio = this.audioArray[currentIndex];
+        const updateProgress = (evt) => {
+            const progressTime = this.cumulativeTime + evt.target.currentTime;
+            this.player.setPlayProgress(progressTime / this.totalTime * 100);
+            this.player.setProgressTime(progressTime);
+        }
+        const onAudioEnded = (evt) => {
+            const audio = evt.target;
+            audio.removeEventListener('timeupdate', updateProgress);
             audio.removeEventListener('ended', onAudioEnded);
-            currentIndex++;
+            this.cumulativeTime += audio.duration;
+            this.promptIndex++;
             playNextAudio();
         }
         const dispatchAudioCompleteEvent = () => {
-            
+            this.player.doneState();
+            this.prepParseChoice();
         }
         playNextAudio();
     }
@@ -452,32 +504,40 @@ export class IAEngine extends UIElement {
     parseChoiceList() {
         const choiceList = this.currentNode.querySelectorAll('choice');
         if (choiceList.length > 0) {
+            console.log(`${IAEngine.INDENT_ONE}Listing ALL <${IAEngine.ELEMENT_CHOICE}> children...`);
             choiceList.forEach(choice => {
                 choice = IAEngine.verifyChoice(choice, this.script);
-                if (IAEngine.evaluateXML(choice)) this.choiceArray.push(choice);
+                if (IAEngine.evaluateXML(choice, this.script, this.variables)) this.choiceArray.push(choice);
             });
-            if (this.choiceArray.length > 0) {
+            const l = this.choiceArray.length;
+            if (l > 0) {
+                console.log(`${IAEngine.INDENT_ONE}Listing TRUE <${IAEngine.ELEMENT_CHOICE}> children...`);
+                for (let i=0; i<l; i++) {
+                    const choice = this.choiceArray[i];
+                    IAEngine.logElement(choice, true, IAEngine.INDENT_TWO);
+                }
+                //this.parseModifyArray(this.promptArray);
                 this.dispatchEventWith(this.#PARSE_CHOICE);
                 return;
-            }
-        }
+            } else console.log(`${IAEngine.INDENT_ONE}All <${IAEngine.ELEMENT_CHOICE}> children are false!`);
+        } else console.log(`${IAEngine.INDENT_ONE}No <${IAEngine.ELEMENT_CHOICE}> children exist.`);
         this.parseGotoList(this.currentNode); // If there are no choices after a prompt, parse the node for goto.
     }
     onParseChoice() {
         this.removeEventListener(this.#PARSE_CHOICE,this.onParseChoice);
-        console.log('onParseChoice');
         //initChoice();
         //showChoice();
     }
     parseGotoList(xml) {
         const gotoList = xml.querySelectorAll(IAEngine.ELEMENT_GOTO);
         const elementPrefix = `Element <${xml.tagName}> with ${IAEngine.ATTRIBUTE_ID}="${xml.getAttribute(IAEngine.ATTRIBUTE_ID)}"`;
-        const indent = xml.tagName === IAEngine.ELEMENT_NODE ? '    ' : '        ';
+        const headerIndent = xml.tagName === IAEngine.ELEMENT_NODE ? IAEngine.INDENT_ONE : IAEngine.INDENT_TWO;
+        const gotoIndent = headerIndent + IAEngine.INDENT_ONE;
         if (gotoList.length > 0) {
-            console.log(`${indent}Listing ALL <${IAEngine.ELEMENT_GOTO}> children...`);
+            console.log(`${headerIndent}Listing ALL <${IAEngine.ELEMENT_GOTO}> children...`);
             const gotoArray = [];
             gotoList.forEach(goto => {
-                gotoArray.push(IAEngine.verifyGoto(goto, indent, this.script));
+                gotoArray.push(IAEngine.verifyGoto(goto, gotoIndent, this.script));
             });
             const l = gotoArray.length;
             let firstTrueGoto;
@@ -490,7 +550,7 @@ export class IAEngine extends UIElement {
             }
             gotoArray.length = 0;
             if (firstTrueGoto) {
-                console.log(`${indent}Executing first TRUE <${IAEngine.ELEMENT_GOTO}>...\n${indent}${firstTrueGoto.outerHTML}`);
+                console.log(`${headerIndent}Executing first TRUE <${IAEngine.ELEMENT_GOTO}>...\n${gotoIndent}${firstTrueGoto.outerHTML}`);
                 this.parseGoto(firstTrueGoto);
             } else throw new Error(`${elementPrefix} has <${IAEngine.ELEMENT_GOTO}> children, but all of them are false.`);
         } else throw new Error(`${elementPrefix} has no <${IAEngine.ELEMENT_GOTO}> children.`);
