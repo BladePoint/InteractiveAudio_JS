@@ -1,7 +1,8 @@
 import { UIElement } from '../UserInterface_JS/UIElement.js';
-import { CircleButton, DoubleProgressSeekBar, GlassPanel, RectButton, ShadedRect, TriangleShadow,
+/*import { CircleButton, DoubleProgressSeekBar, GlassPanel, RectButton, ShadedRect, TriangleShadow,
          iconDownGradient, iconUpGradient, ICON_UP_TOP_HEX, ICON_UP_BOTTOM_HEX, ICON_DOWN_TOP_HEX, ICON_DOWN_BOTTOM_HEX,
-         SHADOW_UP_HEX, SHADOW_DOWN_HEX } from '../UserInterface_JS/iPlayer.js';
+         SHADOW_UP_HEX, SHADOW_DOWN_HEX } from '../UserInterface_JS/iPlayer.js';*/
+import { ShadedRect, GlassPanel, RectButton, CircleButton } from '../UserInterface_JS/iPlayer.js'; //temp
 import { TextField } from '../UserInterface_JS/TextField.js';
 import { AcuteTriangle, Rectangle } from '../UserInterface_JS/Primitives.js';
 import { secondsToHHMMSS } from '../Utilities_JS/mathUtils.js';
@@ -9,6 +10,7 @@ import { secondsToHHMMSS } from '../Utilities_JS/mathUtils.js';
 export class IAPlayer extends UIElement {
     static PLAYER_WIDTH = 352;
     static PLAYER_HEIGHT = 103;
+
     rectButtonLeft = 6;
     rectButtonTop = 15;
     circleButtonLeft = 4;
@@ -29,30 +31,30 @@ export class IAPlayer extends UIElement {
         this.createBackground();
         this.createRectButtons();
         this.createCircleButtons();
-        this.createSeekBar();
-        this.createText();
+        /*this.createSeekBar();
+        this.createText();*/
         this.appendChild(this.shadedRect);
         this.appendChild(this.titleGlass);
         this.appendChild(this.sceneGlass);
         this.appendChild(this.resetButton);
         this.appendChild(this.optionsButton);
         this.appendChild(this.replayButton);
-        this.appendChild(this.pauseButton);
-        this.appendChild(this.playButton);
+        //this.appendChild(this.pauseButton);
+        //this.appendChild(this.playButton);
         this.appendChild(this.skipButton);
-        this.appendChild(this.iae);
+        /*this.appendChild(this.iae);
         this.appendChild(this.titleText);
         this.appendChild(this.sceneText);
         this.appendChild(this.progressText);
         this.appendChild(this.totalText);
-        this.appendChild(this.doubleProgressSeekBar);
+        this.appendChild(this.doubleProgressSeekBar);*/
         //this.disablePlayer();
-        this.notReadyState();
+        //this.notReadyState();
     }
     createBackground() {
         this.shadedRect = new ShadedRect({width:IAPlayer.PLAYER_WIDTH, height:IAPlayer.PLAYER_HEIGHT});
         this.titleGlass = new GlassPanel({width:this.titleGlassWidth, height:32, left:this.titleGlassLeft, top:this.rectButtonTop});
-        this.sceneGlass = new GlassPanel({width:this.sceneGlassWidth, height:26, left:this.sceneGlassLeft, top:this.circleButtonTop});
+        this.sceneGlass = new GlassPanel({width:this.sceneGlassWidth, height:26, left:this.sceneGlassLeft, top:this.circleButtonTop, rimHex:'#dddddd'});
     }
     createRectButtons() {
         this.resetButton = new ResetButton({
@@ -61,6 +63,7 @@ export class IAPlayer extends UIElement {
             left: this.rectButtonLeft,
             top: this.rectButtonTop
         });
+        this.resetButton.enable(); //temp
         this.optionsButton = new OptionsButton({
             width: this.rectButtonWidth,
             height: this.rectButtonHeight,
@@ -71,10 +74,11 @@ export class IAPlayer extends UIElement {
     createCircleButtons() {
         this.replayButton = new ReplayButton({
             upFunction: this.replayCallback,
-            diameter:this.circleButtonDiameter,
-            left:this.circleButtonLeft,
-            top:this.circleButtonTop
-        });
+            width: this.circleButtonDiameter,
+            height: this.circleButtonDiameter,
+            left: this.circleButtonLeft,
+            top: this.circleButtonTop
+        });/*
         this.pauseButton = new PauseButton({
             upFunction: this.pauseCallback,
             diameter: this.circleButtonDiameter,
@@ -86,14 +90,15 @@ export class IAPlayer extends UIElement {
             diameter:this.circleButtonDiameter,
             left: IAPlayer.PLAYER_WIDTH - this.circleButtonLeft * 2 - this.circleButtonDiameter * 2,
             top: this.replayButton.style.top
-        });
+        });*/
         this.skipButton = new SkipButton({
             upFunction: this.skipCallback,
-            diameter:this.circleButtonDiameter, 
+            width: this.circleButtonDiameter,
+            height: this.circleButtonDiameter,
             left: IAPlayer.PLAYER_WIDTH - this.circleButtonLeft - this.circleButtonDiameter,
-            top: this.replayButton.style.top
+            top: this.circleButtonTop
         });
-    }
+    }/*
     createSeekBar() {
         this.doubleProgressSeekBar = new DoubleProgressSeekBar({
             width: this.sceneGlassWidth - 4,
@@ -219,7 +224,7 @@ export class IAPlayer extends UIElement {
     skipCallback = () => {
         this.doneState();
         this.skipFunction();
-    }
+    }*/
 }
 
 class ResetButton extends RectButton {
@@ -242,7 +247,7 @@ class ReplayButton extends CircleButton {
         
     }
 }
-
+/*
 class PauseButton extends CircleButton {
     constructor(options) {
         super(options);
@@ -354,7 +359,7 @@ class PlayButton extends CircleButton {
         this.triangle.parseStateOptions(this.triangleUpOptions);
     }
 }
-
+*/
 class SkipButton extends CircleButton {
     constructor(options) {
         super(options);
