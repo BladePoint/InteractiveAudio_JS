@@ -1,13 +1,19 @@
 import { UIElement } from '../../frameworks/UserInterface_JS/UIElement.js';
 import { AssetLoader } from '../../frameworks/Utilities_JS/AssetLoader.js';
+import { AudioManager } from '../../frameworks/Utilities_JS/AudioManager.js';
+import { Variables } from '../../frameworks/Utilities_JS/Variables.js';
+import { COMPLETE } from '../../frameworks/Utilities_JS/constants.js';
 import { IAPlayer } from './IAPlayer.js';
+import { IABranches } from './IABranches.js';
 
 export class IAEngine extends UIElement {
-    #LOAD_SCRIPT = 'loadScript';
+    static COMPLETE_LOAD_SCRIPT = 'completeLoadScript';
     //#GOTO_SCENE = 'gotoScene';
-    #PARSE_PROMPT = 'parsePrompt';
-    #PARSE_CHOICE = 'parseChoice';
-    #PARSE_GOTO = 'parseGoto';
+    static COMPLETE_PARSE_PROMPT = 'completeParsePrompt';
+    static COMPLETE_PLAY_PROMPT = 'completePlayPrompt';
+    static COMPLETE_PARSE_CHOICE = 'completeParseChoice';
+    static COMPLETE_MADE_CHOICE = 'completeMadeChoice';
+    static COMPLETE_PARSE_GOTO = 'completeParseGoto';
     static ATTRIBUTE_ID = 'id';
     static ATTRIBUTE_SCENE_ID = 'sceneID';
     static ATTRIBUTE_NODE_ID = 'nodeID';
@@ -32,6 +38,7 @@ export class IAEngine extends UIElement {
     static INDENT_ONE = '    ';
     static INDENT_TWO = `${IAEngine.INDENT_ONE}${IAEngine.INDENT_ONE}`;
     static INDENT_THREE = `${IAEngine.INDENT_ONE}${IAEngine.INDENT_ONE}${IAEngine.INDENT_ONE}`;
+    static INDENT_FOUR = `${IAEngine.INDENT_ONE}${IAEngine.INDENT_ONE}${IAEngine.INDENT_ONE}${IAEngine.INDENT_ONE}`;
     static getScene(sceneID, script) {
         const sceneList = script.querySelectorAll(`Scenes ${IAEngine.ELEMENT_SCENE}[id="${sceneID}"]`);
         const l = sceneList.length;
@@ -93,7 +100,7 @@ export class IAEngine extends UIElement {
             } else throw new Error(`${promptPrefix} does not have a "${IAEngine.ATTRIBUTE_FILE}" attribute nor does it have "${IAEngine.ATTRIBUTE_PROMPT_ID}", "${$IAEngine.ATTRIBUTE_NODE_ID}", and "${IAEngine.ATTRIBUTE_SCENE_ID}" reference attributes.`);
         }
     }
-    static verifyCondition(condition, script) { // Verify the condition, which may have a parent that is a prompt, choice, or goto.
+    static verifyCondition(condition, indent, script) { // Verify the condition, which may have a parent that is a prompt, choice, or goto.
         if (condition.hasAttribute(IAEngine.ATTRIBUTE_VAR_ID) &&
             condition.hasAttribute(IAEngine.ATTRIBUTE_OPERATOR) &&
             condition.hasAttribute(IAEngine.ATTRIBUTE_VALUE)) return condition;
@@ -103,7 +110,7 @@ export class IAEngine extends UIElement {
             const sceneID = condition.getAttribute(IAEngine.ATTRIBUTE_SCENE_ID);
             const conditionPrefix = `Condition "${condition.getAttribute(IAEngine.ATTRIBUTE_ID)}"`;
             if (conditionID && nodeID && sceneID) {
-                console.log(`${conditionPrefix} attempting to reference another <${IAEngine.ELEMENT_CONDITION}> with ${IAEngine.ATTRIBUTE_CONDITION_ID}="${conditionID}", ${IAEngine.ATTRIBUTE_NODE_ID}="${nodeID}", and ${IAEngine.ATTRIBUTE_SCENE_ID}="${sceneID}"...`);
+                console.log(`${indent}Attempting to reference another <${IAEngine.ELEMENT_CONDITION}> with ${IAEngine.ATTRIBUTE_CONDITION_ID}="${conditionID}", ${IAEngine.ATTRIBUTE_NODE_ID}="${nodeID}", and ${IAEngine.ATTRIBUTE_SCENE_ID}="${sceneID}"...`);
                 let parentID;
                 let parentType;
                 let grandParentID;
@@ -132,13 +139,13 @@ export class IAEngine extends UIElement {
                 if (grandParentID && grandParentType) grandparentXML = IAEngine.getChildElement(grandParentID, grandParentType, grandparentXML);
                 const parentXML = IAEngine.getChildElement(parentID, parentType, grandparentXML);
                 condition = IAEngine.getChildElement(conditionID, IAEngine.ELEMENT_CONDITION, parentXML);
-                return this.verifyCondition(condition, script);
+                return this.verifyCondition(condition, indent, script);
             } else throw new Error(`${conditionPrefix} does not have "${IAEngine.ATTRIBUTE_VAR_ID}", "${IAEngine.ATTRIBUTE_OPERATOR}" and "${IAEngine.ATTRIBUTE_VALUE}" attributes nor does it have "${IAEngine.ATTRIBUTE_CONDITION_ID}", "${IAEngine.ATTRIBUTE_NODE_ID}", and "${IAEngine.ATTRIBUTE_SCENE_ID}" reference attributes.`);
         }
     }
     static verifyModifyVar(modifyVar, script) {
         if (modifyVar.hasAttribute(IAEngine.ATTRIBUTE_VAR_ID) && modifyVar.hasAttribute(IAEngine.ATTRIBUTE_COMMAND) && modifyVar.hasAttribute(IAEngine.ATTRIBUTE_VALUE)) {
-            console.log(`Verified: ${modifyVar.outerHTML}`);
+            //console.log(`Verified: ${modifyVar.outerHTML}`);
             return modifyVar;
         } else {
             const modifyVarID = prompt.getAttribute(IAEngine.ATTRIBUTE_MODIFYVAR_ID);
@@ -178,7 +185,7 @@ export class IAEngine extends UIElement {
             const sceneID = choice.getAttribute(IAEngine.ATTRIBUTE_SCENE_ID);
             const choicePrefix = `Choice "${choice.getAttribute(IAEngine.ATTRIBUTE_ID)}"`;
             if (choiceID && nodeID && sceneID) {
-                console.log(`${choicePrefix} attempting to reference another <${IAEngine.ELEMENT_CHOICE}> with ${IAEngine.ATTRIBUTE_CHOICE_ID}="${choiceID}", ${IAEngine.ATTRIBUTE_NODE_ID}="${nodeID}", and ${IAEngine.ATTRIBUTE_SCENE_ID}="${sceneID}"...`);
+                console.log(`${IAEngine.INDENT_TWO}Attempting to reference another <${IAEngine.ELEMENT_CHOICE}> with ${IAEngine.ATTRIBUTE_CHOICE_ID}="${choiceID}", ${IAEngine.ATTRIBUTE_NODE_ID}="${nodeID}", and ${IAEngine.ATTRIBUTE_SCENE_ID}="${sceneID}"...`);
                 const node = IAEngine.getNodeFromString(nodeID, sceneID, script);
                 choice = IAEngine.getChildElement(choiceID, IAEngine.ELEMENT_CHOICE, node);
                 return this.verifyChoice(choice, script);
@@ -190,7 +197,7 @@ export class IAEngine extends UIElement {
         const nodeID = goto.getAttribute(IAEngine.ATTRIBUTE_NODE_ID);
         const sceneID = goto.getAttribute(IAEngine.ATTRIBUTE_SCENE_ID);
         if (!gotoID && (nodeID || sceneID)) {
-            console.log(`${indent}${goto.outerHTML}`);
+            this.logElement(goto, true, indent);
             return goto;
         } else {
             const gotoPrefix = `Goto "${goto.getAttribute(IAEngine.ATTRIBUTE_ID)}"`;
@@ -205,19 +212,19 @@ export class IAEngine extends UIElement {
             else throw new Error(`${gotoPrefix} is invalid.`);
         }
     }
-    static evaluateXML(xml, script, variables) {
+    static evaluateXML(xml, indent, script, variables) {
         const conditionArray = Array.from(xml.children).filter(child => {return child.tagName === IAEngine.ELEMENT_CONDITION;});
         const l = conditionArray.length;
         for (let i=0; i<l; i++) {
             let condition = conditionArray[i];
-            condition = IAEngine.verifyCondition(condition, script);
+            condition = IAEngine.verifyCondition(condition, indent, script);
             const varID = condition.getAttribute(IAEngine.ATTRIBUTE_VAR_ID);
             const operator = condition.getAttribute(IAEngine.ATTRIBUTE_OPERATOR);
             const value = parseFloat(condition.getAttribute(IAEngine.ATTRIBUTE_VALUE));
-            if (!IAEngine.evaluate(variables, varID, operator, value, IAEngine.INDENT_THREE)) {
-                console.log(`${IAEngine.INDENT_THREE}${condition.outerHTML} - FALSE`);
+            if (!IAEngine.evaluate(variables, varID, operator, value, indent)) {
+                console.log(`${indent}${condition.outerHTML} - FALSE`);
                 return false;
-            } else console.log(`${IAEngine.INDENT_THREE}${condition.outerHTML} - TRUE`);
+            } else console.log(`${indent}${condition.outerHTML} - TRUE`);
         }
         return true;
     }
@@ -248,7 +255,7 @@ export class IAEngine extends UIElement {
             default:
                 throw new Error(`Operator "${operator}" is invalid.`);
         }
-        console.log(`${indent}${varID} = ${testValue}`);
+        console.log(`${indent}Variable "${varID}" has a current value of "${testValue}".`);
         return result;
     }
 
@@ -256,8 +263,13 @@ export class IAEngine extends UIElement {
         super();
         this.projectName = projectName;
         this.player = new IAPlayer();
-        this.player.playFunction = this.playPromptAudio;
+        this.player.replayFunction = this.pressReplay;
+        this.player.pauseFunction = this.pressPause;
+        this.player.playFunction = this.pressPlay;
+        this.player.skipFunction = this.pressSkip;
         this.appendChild(this.player);
+        this.branches = new IABranches({width:IAPlayer.PLAYER_WIDTH, top:IAPlayer.PLAYER_HEIGHT+10});
+        this.appendChild(this.branches);
         this.assetLoader = new AssetLoader({
             requestLogFunction: this.requestLog,
             progressFunction: this.requestProgress
@@ -269,19 +281,57 @@ export class IAEngine extends UIElement {
         this.currentScene = null;
         this.currentNode = null;
         this.promptArray = [];
-        this.audioArray = [];
+        this.voArray = [];
+        this.voCurrent;
         this.choiceArray = [];
         this.promptIndex;
         this.cumulativeTime;
         this.totalTime;
         this.firstAudio = true;
     }
+    pressReplay = () => {
+        this.player.notReadyState();
+        const vo = this.voCurrent;
+        this.removeEndListenerFromVo(vo);
+        AudioManager.fadeOut(vo, 200, () => {
+            this.removeUpdateListenerFromVo(vo);
+            vo.currentTime = 0;
+            this.promptIndex = 0;
+            this.cumulativeTime = 0;
+            this.player.setProgressToZero();
+            this.playPromptVo();
+        });
+    }
+    pressPause = () => {
+        const vo = this.voCurrent;
+        if (vo) {
+            this.player.pauseState();
+            vo.pause();
+        }
+    }
+    pressPlay = () => {
+        const voCurrent = this.voCurrent;
+        if (voCurrent && voCurrent.paused) voCurrent.play();
+        else this.playPromptVo();
+    }
+    pressSkip = () => {
+        this.player.notReadyState();
+        const vo = this.voCurrent;
+        this.removeEndListenerFromVo(vo);
+        AudioManager.fadeOut(vo, 200, () => {
+            this.removeUpdateListenerFromVo(vo);
+            vo.currentTime = 0;
+            this.player.doneState();
+            this.player.setProgressToTotal();
+            this.dispatchEventWith(IAEngine.COMPLETE_PLAY_PROMPT);
+        });
+    }
     exec() {
-        this.addEventListener(this.#LOAD_SCRIPT,this.onLoadScript);
+        this.addEventListener(IAEngine.COMPLETE_LOAD_SCRIPT, this.onLoadScript);
         this.loadScript('script.iae')
             .then((xmlData) => {
                 this.script = xmlData;
-                this.dispatchEventWith(this.#LOAD_SCRIPT);
+                this.dispatchEventWith(IAEngine.COMPLETE_LOAD_SCRIPT);
             })
             .catch((error) => {
                 console.error(error);
@@ -306,7 +356,7 @@ export class IAEngine extends UIElement {
         });
     }
     onLoadScript() {
-        this.removeEventListener(this.#LOAD_SCRIPT,this.onLoadScript);
+        this.removeEventListener(IAEngine.COMPLETE_LOAD_SCRIPT,this.onLoadScript);
         this.player.setTitleText(this.script.querySelector('InteractiveAudioAdventure').getAttribute('title'));
         this.parseScript();
     }
@@ -332,7 +382,7 @@ export class IAEngine extends UIElement {
     }
     gotoNext() {
         if (!this.currentScene || this.currentScene.getAttribute(IAEngine.ATTRIBUTE_ID) !== this.nextSceneName) {
-            this.addEventListener(this.END_SCENE,this.gotoScene);
+            this.addEventListener(this.END_SCENE, this.gotoScene);
             this.dispatchEventWith(this.END_SCENE);
         } else this.gotoNode();
     }
@@ -353,6 +403,7 @@ export class IAEngine extends UIElement {
         this.currentNode = IAEngine.getNodeFromXML(this.nextNodeName, this.currentScene);
         this.nextNodeName = null;
         this.promptArray.length = this.choiceArray.length = 0;
+        this.voCurrent = null;
         this.promptIndex = 0;
         this.disposeAudio();
         this.cumulativeTime = 0;
@@ -363,14 +414,14 @@ export class IAEngine extends UIElement {
         this.prepParsePrompt();
     }
     disposeAudio() {
-        this.audioArray.forEach(audio => {
+        this.voArray.forEach(audio => {
             URL.revokeObjectURL(audio.src);
             audio.src = '';
         });
-        this.audioArray.length = 0;
+        this.voArray.length = 0;
     }
     prepParsePrompt() {
-        this.addEventListener(this.#PARSE_PROMPT,this.onParsePrompt);
+        this.addEventListener(IAEngine.COMPLETE_PARSE_PROMPT, this.onParsePrompt);
         this.parsePromptList();
     }
     parsePromptList() {
@@ -379,7 +430,7 @@ export class IAEngine extends UIElement {
             console.log(`${IAEngine.INDENT_ONE}Listing ALL <${IAEngine.ELEMENT_PROMPT}> children...`);
             promptList.forEach(prompt => {
                 prompt = IAEngine.verifyPrompt(prompt, this.script);
-                if (IAEngine.evaluateXML(prompt, this.script, this.variables)) this.promptArray.push(prompt);
+                if (IAEngine.evaluateXML(prompt, IAEngine.INDENT_THREE, this.script, this.variables)) this.promptArray.push(prompt);
             });
             const l = this.promptArray.length;
             if (l > 0 ) {
@@ -391,7 +442,7 @@ export class IAEngine extends UIElement {
                 this.parseModifyArray(this.promptArray);
             } else console.log(`${IAEngine.INDENT_ONE}All <${IAEngine.ELEMENT_PROMPT}> children are false!`);
         } else console.log(`${IAEngine.INDENT_ONE}No <${IAEngine.ELEMENT_PROMPT}> children exist.`);
-        this.dispatchEventWith(this.#PARSE_PROMPT);
+        this.dispatchEventWith(IAEngine.COMPLETE_PARSE_PROMPT);
     }
     parseModifyArray(xmlArray) {
         const sceneID = this.currentScene.getAttribute(IAEngine.ATTRIBUTE_ID);
@@ -411,19 +462,20 @@ export class IAEngine extends UIElement {
             if (command === 'setVar') this.variables.setVar(varID, value);
             else if (command === 'incVar') this.variables.incVar(varID, value);
             else if (command === 'decVar') this.variables.decVar(varID, value);
+            console.log(`${IAEngine.INDENT_THREE}Variable "${varID}" set to "${this.variables.getVar(varID)}".`);
         });
     }
     onParsePrompt() {
-        this.removeEventListener(this.#PARSE_PROMPT, this.onParsePrompt);
+        this.removeEventListener(IAEngine.COMPLETE_PARSE_PROMPT, this.onParsePrompt);
         if (this.promptArray.length > 0) this.loadPromptAudio();
         else this.prepParseChoice()
     }
     loadPromptAudio() {
         const fileArray = this.promptArray.map(prompt => {return prompt.getAttribute(IAEngine.ATTRIBUTE_FILE);});
-        const urlArray = fileArray.map(file => {return `../../projects/${this.projectName}/audio/${file}`});
+        const urlArray = fileArray.map(file => {return `./audio/${file}`});
         this.assetLoader.errorFunction = requestError;
         this.assetLoader.completeLogFunction = completeLog;
-        this.assetLoader.addEventListener(AssetLoader.COMPLETE, this.processBlobs);
+        this.assetLoader.addEventListener(COMPLETE, this.processBlobs);
         this.assetLoader.loadArray(urlArray);
         function requestError(i) {
             throw new Error(`${IAEngine.INDENT_ONE}Failed to download "${urlArray[i]}".`);
@@ -433,7 +485,7 @@ export class IAEngine extends UIElement {
         }
     }
     processBlobs = () => {
-        this.assetLoader.removeEventListener(AssetLoader.COMPLETE, this.processBlobs);
+        this.assetLoader.removeEventListener(COMPLETE, this.processBlobs);
         const LOADED_METADATA = 'loadedmetadata';
         const l = this.assetLoader.blobArray.length;
         let durationCount = 0;
@@ -450,16 +502,17 @@ export class IAEngine extends UIElement {
         for (let i=0; i<l; i++) {
             const blob = this.assetLoader.blobArray[i];
             const blobUrl = URL.createObjectURL(blob);
-            const audio = this.audioArray[i] = new Audio();
+            const audio = this.voArray[i] = new Audio();
             audio.setAttribute(IAEngine.ATTRIBUTE_FILE, this.promptArray[i].getAttribute(IAEngine.ATTRIBUTE_FILE));
             audio.addEventListener(LOADED_METADATA, addDuration);
             audio.src = blobUrl;
         }
         this.assetLoader.dispose();
+        this.addEventListener(IAEngine.COMPLETE_PLAY_PROMPT, this.prepParseChoice);
         if (this.firstAudio) {
             this.firstAudio = false;
-            this.player.initState();
-        } else this.playPromptAudio();
+            this.player.firstReadyState();
+        } else this.playPromptVo();
     }
     requestLog(url) {
         console.log(`${IAEngine.INDENT_ONE}Requesting file: ${url}`);
@@ -467,38 +520,43 @@ export class IAEngine extends UIElement {
     requestProgress = (percent) => {
         this.player.setLoadProgress(percent);
     }
-    playPromptAudio = () => {
-        const playNextAudio = () => {
-            if (this.promptIndex < this.audioArray.length) {
-                const audio = this.audioArray[this.promptIndex];
-                audio.addEventListener('timeupdate', updateProgress);
-                audio.addEventListener('ended', onAudioEnded);
-                console.log(`${IAEngine.INDENT_ONE}Playing "${audio.getAttribute(IAEngine.ATTRIBUTE_FILE)}".`);
-                audio.play();
-            } else dispatchAudioCompleteEvent();
-        }
-        const updateProgress = (evt) => {
-            const progressTime = this.cumulativeTime + evt.target.currentTime;
-            this.player.setPlayProgress(progressTime / this.totalTime * 100);
-            this.player.setProgressTime(progressTime);
-        }
-        const onAudioEnded = (evt) => {
-            const audio = evt.target;
-            audio.removeEventListener('timeupdate', updateProgress);
-            audio.removeEventListener('ended', onAudioEnded);
-            this.cumulativeTime += audio.duration;
-            this.promptIndex++;
-            playNextAudio();
-        }
-        const dispatchAudioCompleteEvent = () => {
+    playPromptVo = () => {
+        if (this.promptIndex < this.voArray.length) {
+            this.player.playState();
+            const vo = this.voCurrent = this.voArray[this.promptIndex];
+            vo.addEventListener('timeupdate', this.updateVo);
+            vo.addEventListener('ended', this.endedVo);
+            console.log(`${IAEngine.INDENT_ONE}Playing VO "${vo.getAttribute(IAEngine.ATTRIBUTE_FILE)}".`);
+            vo.play();
+        } else {
             this.player.doneState();
-            this.prepParseChoice();
+            this.dispatchEventWith(IAEngine.COMPLETE_PLAY_PROMPT);
         }
-        playNextAudio();
+    }
+    updateVo = (evt) => {
+        const progressTime = this.cumulativeTime + evt.target.currentTime;
+        this.player.setPlayProgress(progressTime / this.totalTime * 100);
+        this.player.setProgressTime(progressTime);
+    }
+    endedVo = (evt) => {
+        const vo = evt.target;
+        this.removeUpdateListenerFromVo(vo);
+        this.removeEndListenerFromVo(vo);
+        vo.currentTime = 0;
+        this.cumulativeTime += vo.duration;
+        this.promptIndex++;
+        this.playPromptVo();
+    }
+    removeUpdateListenerFromVo(vo) {
+        vo.removeEventListener('timeupdate', this.updateVo);
+    }
+    removeEndListenerFromVo(vo) {
+        vo.removeEventListener('ended', this.endedVo);
     }
     prepParseChoice() {
-        this.addEventListener(this.#PARSE_CHOICE, this.onParseChoice);
-        this.addEventListener(this.#PARSE_GOTO, this.onParseGoto);
+        this.removeEventListener(IAEngine.COMPLETE_PLAY_PROMPT, this.prepParseChoice);
+        this.addEventListener(IAEngine.COMPLETE_PARSE_CHOICE, this.onParseChoice);
+        this.addEventListener(IAEngine.COMPLETE_PARSE_GOTO, this.onParseGoto);
         this.parseChoiceList();
     }
     parseChoiceList() {
@@ -507,7 +565,7 @@ export class IAEngine extends UIElement {
             console.log(`${IAEngine.INDENT_ONE}Listing ALL <${IAEngine.ELEMENT_CHOICE}> children...`);
             choiceList.forEach(choice => {
                 choice = IAEngine.verifyChoice(choice, this.script);
-                if (IAEngine.evaluateXML(choice, this.script, this.variables)) this.choiceArray.push(choice);
+                if (IAEngine.evaluateXML(choice, IAEngine.INDENT_THREE, this.script, this.variables)) this.choiceArray.push(choice);
             });
             const l = this.choiceArray.length;
             if (l > 0) {
@@ -516,17 +574,21 @@ export class IAEngine extends UIElement {
                     const choice = this.choiceArray[i];
                     IAEngine.logElement(choice, true, IAEngine.INDENT_TWO);
                 }
-                //this.parseModifyArray(this.promptArray);
-                this.dispatchEventWith(this.#PARSE_CHOICE);
+                this.dispatchEventWith(IAEngine.COMPLETE_PARSE_CHOICE);
                 return;
             } else console.log(`${IAEngine.INDENT_ONE}All <${IAEngine.ELEMENT_CHOICE}> children are false!`);
         } else console.log(`${IAEngine.INDENT_ONE}No <${IAEngine.ELEMENT_CHOICE}> children exist.`);
         this.parseGotoList(this.currentNode); // If there are no choices after a prompt, parse the node for goto.
     }
     onParseChoice() {
-        this.removeEventListener(this.#PARSE_CHOICE,this.onParseChoice);
-        //initChoice();
-        //showChoice();
+        this.removeEventListener(IAEngine.COMPLETE_PARSE_CHOICE,this.onParseChoice);
+        this.branches.addEventListener(IAEngine.COMPLETE_MADE_CHOICE, this.parseChosen);
+        this.branches.displayChoices(this.choiceArray);
+    }
+    parseChosen = (evt) => {
+        const choice = evt.detail;
+        console.log(`${IAEngine.INDENT_ONE}Selected ${IAEngine.abridgeElement(choice, true)}...`);
+        this.parseGotoList(choice);
     }
     parseGotoList(xml) {
         const gotoList = xml.querySelectorAll(IAEngine.ELEMENT_GOTO);
@@ -535,22 +597,17 @@ export class IAEngine extends UIElement {
         const gotoIndent = headerIndent + IAEngine.INDENT_ONE;
         if (gotoList.length > 0) {
             console.log(`${headerIndent}Listing ALL <${IAEngine.ELEMENT_GOTO}> children...`);
-            const gotoArray = [];
+            const trueArray = [];
             gotoList.forEach(goto => {
-                gotoArray.push(IAEngine.verifyGoto(goto, gotoIndent, this.script));
+                goto = IAEngine.verifyGoto(goto, gotoIndent, this.script);
+                if (IAEngine.evaluateXML(goto, gotoIndent + IAEngine.INDENT_ONE, this.script, this.variables)) trueArray.push(goto);
             });
-            const l = gotoArray.length;
-            let firstTrueGoto;
-            for (let i=0; i<l; i++) {
-                const goto = gotoArray[i];
-                if (IAEngine.evaluateXML(goto)) {
-                    firstTrueGoto = goto;
-                    break;
-                }
-            }
-            gotoArray.length = 0;
-            if (firstTrueGoto) {
-                console.log(`${headerIndent}Executing first TRUE <${IAEngine.ELEMENT_GOTO}>...\n${gotoIndent}${firstTrueGoto.outerHTML}`);
+            const l = trueArray.length;
+            if (l > 0) {
+                const firstTrueGoto = trueArray[0];
+                trueArray.length = 0;
+                console.log(`${headerIndent}Executing first TRUE <${IAEngine.ELEMENT_GOTO}>...`);
+                IAEngine.logElement(firstTrueGoto, true, gotoIndent);
                 this.parseGoto(firstTrueGoto);
             } else throw new Error(`${elementPrefix} has <${IAEngine.ELEMENT_GOTO}> children, but all of them are false.`);
         } else throw new Error(`${elementPrefix} has no <${IAEngine.ELEMENT_GOTO}> children.`);
@@ -563,52 +620,14 @@ export class IAEngine extends UIElement {
         }
         const nodeID = goto.getAttribute(IAEngine.ATTRIBUTE_NODE_ID);
         if (nodeID) this.nextNodeName = nodeID;
-        this.dispatchEventWith(this.#PARSE_GOTO);
+        this.dispatchEventWith(IAEngine.COMPLETE_PARSE_GOTO);
     }
     onParseGoto() {
-        this.removeEventListener(this.#PARSE_GOTO,this.onParseGoto);
-        this.removeEventListener(this.#PARSE_CHOICE,this.onParseChoice);
+        this.removeEventListener(IAEngine.COMPLETE_PARSE_GOTO,this.onParseGoto);
+        this.removeEventListener(IAEngine.COMPLETE_PARSE_CHOICE,this.onParseChoice);
         //player.disableProgress();
         //player.replay.disable();
         //cleanPrompt();
         this.gotoNext();
-    }
-}
-
-class Variables {
-    constructor() {
-        this.object = {};
-    }
-    getVar(property) {
-        return this.getObjectProperty(property);
-    }
-    setVar(property, value) {
-        this.setObjectProperty(property, value);
-    }
-
-    incVar(property, amount = 1) {
-        this.incrementObjectProperty(property, amount);
-    }
-
-    decVar(property, amount = 1) {
-        this.decrementObjectProperty(property, amount);
-    }
-    reset() {
-        this.object = {};
-    }
-    getObjectProperty(property) {
-        return this.object.hasOwnProperty(property) ? this.object[property] : 0;
-    }
-    setObjectProperty(property, value) {
-        this.object[property] = value;
-    }
-    incrementObjectProperty(property, amount = 1) {
-        if (this.object.hasOwnProperty(property)) {
-            const currentValue = this.object[property];
-            this.object[property] = currentValue + amount;
-        } else this.setObjectProperty(property, amount);
-    }
-    decrementObjectProperty(property, amount = 1) {
-        this.incrementObjectProperty(property, -amount);
     }
 }

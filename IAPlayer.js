@@ -1,21 +1,24 @@
 import { UIElement } from '../UserInterface_JS/UIElement.js';
 import { ShadedRect, GlassPanel, RectButton, CircleButton,
          TriangleShadow, RimmedBar, DoubleProgressSeekBar,
-         SHADOW_UP_HEX, SHADOW_DOWN_HEX, ICON_UP_TOP_HEX, ICON_UP_BOTTOM_HEX, ICON_DOWN_TOP_HEX, ICON_DOWN_BOTTOM_HEX,
+         RIM_HEX, SHADOW_UP_HEX, SHADOW_DOWN_HEX, ICON_UP_TOP_HEX, ICON_UP_BOTTOM_HEX, ICON_DOWN_TOP_HEX, ICON_DOWN_BOTTOM_HEX,
          BAR_SHADOW_DEFAULT, BAR_SHADOW_ALT, BAR_RECT_DEFAULT, BAR_RECT_ALT } from '../UserInterface_JS/iPlayer.js';
 import { TextField } from '../UserInterface_JS/TextField.js';
 import { AcuteTriangle, Rectangle, getGradient } from '../UserInterface_JS/Primitives.js';
 import { secondsToHHMMSS } from '../Utilities_JS/mathUtils.js';
-import { LEFT, RIGHT, LEFT_TO_RIGHT, RIGHT_TO_LEFT, TOP_TO_BOTTOM, BOTTOM_TO_TOP } from '../Utilities_JS/constants.js';
+import { LEFT, RIGHT, UP, NONE, LEFT_TO_RIGHT, RIGHT_TO_LEFT, TOP_TO_BOTTOM, BOTTOM_TO_TOP } from '../Utilities_JS/constants.js';
 
 export class IAPlayer extends UIElement {
     static PLAYER_WIDTH = 352;
     static PLAYER_HEIGHT = 103;
-    static CIRCLE_ICON_DEFAULT_TOP = 13.5;
+    static STATE_NOT_READY = 'stateNotReady';
+    static STATE_FIRST_READY = 'stateFirstReady';
+    static STATE_PLAY = 'statePlay';
+    static STATE_PAUSE = 'statePause';
+    static STATE_DONE = 'stateDone';
+    static CIRCLE_ICON_DEFAULT_TOP = 14;
     static CIRCLE_ICON_ALT_TOP = IAPlayer.CIRCLE_ICON_DEFAULT_TOP + .25;
-    static TRIANGLE_WIDTH = 18;
-    static TRIANGLE_HEIGHT = 21;
-    static vBarInit = {width:5, height:22, barHex:BAR_RECT_DEFAULT};
+    static vBarInit = {width:5, height:20, barHex:BAR_RECT_DEFAULT};
     static vBarDefault = {background:BAR_SHADOW_DEFAULT, barHex:BAR_RECT_DEFAULT, top:IAPlayer.CIRCLE_ICON_DEFAULT_TOP};
     static vBarAlt = {background:BAR_SHADOW_ALT, barHex:BAR_RECT_ALT, top:IAPlayer.CIRCLE_ICON_ALT_TOP};
     constructor() {
@@ -24,10 +27,10 @@ export class IAPlayer extends UIElement {
         this.pauseFunction;
         this.playFunction;
         this.skipFunction;
-        const titleGlassWidth = 248;
         const titleGlassLeft = 52;
-        const sceneGlassWidth = 136;
+        const titleGlassWidth = IAPlayer.PLAYER_WIDTH - titleGlassLeft*2;
         const sceneGlassLeft = 108;
+        const sceneGlassWidth = IAPlayer.PLAYER_WIDTH - sceneGlassLeft*2;
         const rectButtonWidth = 44;
         const rectButtonHeight = 32;
         const rectButtonLeft = 6;
@@ -52,6 +55,8 @@ export class IAPlayer extends UIElement {
                 left: IAPlayer.PLAYER_WIDTH - rectButtonWidth - rectButtonLeft,
                 top: rectButtonTop
             });
+            this.resetButton.enable();
+            this.optionsButton.enable();
         }
         const createCircleButtons = () => {
             const diameter = 48;
@@ -103,10 +108,11 @@ export class IAPlayer extends UIElement {
             this.titleText = new TextField({
                 width: titleGlassWidth - 2,
                 fontFamily: 'Consolas, monospace',
-                fontSize: 16,
+                fontWeight: 'bold',
+                fontSize: 18,
                 textAlign: 'center',
                 color: '#000000',
-                top: rectButtonTop + 10,
+                top: rectButtonTop + 9,
                 left: titleGlassLeft + 1
             });
             this.sceneText = new TextField({
@@ -157,13 +163,15 @@ export class IAPlayer extends UIElement {
         this.appendChild(this.progressText);
         this.appendChild(this.totalText);
         this.appendChild(this.doubleProgressSeekBar);
-        //this.disablePlayer();
         this.notReadyState();
+        //this.disablePlayer();
     }
     setTitleText(newText) {this.titleText.text = this.cleanText(newText);}
     setSceneText(newText) {this.sceneText.text = this.cleanText(newText);}
     setTotalTime(seconds) {this.totalText.text = secondsToHHMMSS(seconds);}
     setProgressTime(seconds) {this.progressText.text = secondsToHHMMSS(seconds);}
+    setProgressToZero() {this.setPlayProgress(0); this.setProgressTime(0);}
+    setProgressToTotal() {this.setPlayProgress(100); this.progressText.text = this.totalText.text;}
     setLoadProgress(percent) {this.doubleProgressSeekBar.rearProgress = percent;}
     setPlayProgress(percent) {this.doubleProgressSeekBar.frontProgress = percent;}
     cleanText(text) {return text.replace(/\n/g, '');} // Replace carriage returns with nothing.
@@ -177,7 +185,7 @@ export class IAPlayer extends UIElement {
         this.playButton.disable();
         this.skipButton.disable();
     }
-    initState() {
+    firstReadyState() {
         this.playButton.enable();
     }
     playState() {
@@ -191,6 +199,7 @@ export class IAPlayer extends UIElement {
         this.playButton.enable();
     }
     doneState() {
+        this.replayButton.enable();
         this.pauseButton.disable();
         this.playButton.disable();
         this.skipButton.disable();
@@ -216,14 +225,86 @@ export class IAPlayer extends UIElement {
 class ResetButton extends RectButton {
     constructor(options) {
         super(options);
-            
+        const altDelta = .25;
+        const iconWidth = 20;
+        const iconLeft = (options.width - iconWidth) / 2;
+        const triangleTop = 9.5;
+        const triangleHeight = 8;
+        const triangleOptions = {orientation:UP, width:iconWidth, height:triangleHeight};
+        this.defaultShadow = {color:SHADOW_UP_HEX, left:iconLeft, top:triangleTop};
+        this.altShadow = {color:SHADOW_DOWN_HEX, left:iconLeft, top:triangleTop+altDelta};
+        this.shadow = new TriangleShadow({...triangleOptions, ...this.defaultShadow});
+        this.defaultTriangle = {
+            color: getGradient('iconUp', [ICON_UP_TOP_HEX, ICON_UP_BOTTOM_HEX], TOP_TO_BOTTOM),
+            left: iconLeft,
+            top: triangleTop
         }
+        this.altTriangle = {
+            color: getGradient('iconDown', [ICON_DOWN_TOP_HEX, ICON_DOWN_BOTTOM_HEX], TOP_TO_BOTTOM),
+            left: iconLeft,
+            top: this.defaultTriangle.top + altDelta
+        }
+        this.triangle = new AcuteTriangle({...triangleOptions, ...this.defaultTriangle});
+        const barTop = triangleTop + triangleHeight + 2;
+        this.hBarDefault = {background:RIM_HEX, barHex:ICON_UP_BOTTOM_HEX, top:barTop};
+        this.hBarAlt = {background:SHADOW_DOWN_HEX, barHex:ICON_DOWN_BOTTOM_HEX, top:barTop+altDelta};
+        this.hBar = new RimmedBar({...this.hBarDefault, rimSide:NONE, width:iconWidth, height:3, left:iconLeft});
+        this.rectRimGroup.appendChild(this.shadow);
+        this.rectRimGroup.appendChild(this.triangle);
+        this.rectRimGroup.appendChild(this.hBar);
     }
+    downState() {
+        super.downState();
+        this.shadow.colorAndPosition(this.altShadow);
+        this.triangle.colorAndPosition(this.altTriangle);
+        this.hBar.assignStyles(this.hBarAlt);
+    }
+    upState() {
+        super.upState();
+        this.shadow.colorAndPosition(this.defaultShadow);
+        this.triangle.colorAndPosition(this.defaultTriangle);
+        this.hBar.assignStyles(this.hBarDefault);
+    }
+}
 
 class OptionsButton extends RectButton {
     constructor(options) {
         super(options);
-        
+        const barLeft = 12;
+        const barWidth = options.width - barLeft*2 + 1;
+        const barHeight = 3;
+        const barGap = barHeight + 2;
+        const firstTop = 9.5;
+        const secondTop = firstTop + barGap;
+        const thirdTop = secondTop + barGap;
+        const altDelta = .25;
+        const hBarInit = {rimSide:RIGHT, width:barWidth, height:barHeight, left:barLeft};
+        const hBarDefault = {background:RIM_HEX, barHex:ICON_UP_BOTTOM_HEX};
+        const hBarAlt = {background:SHADOW_DOWN_HEX, barHex:ICON_DOWN_BOTTOM_HEX};
+        this.defaultFirst = {...hBarDefault, top:firstTop};
+        this.altFirst = {...hBarAlt, top:firstTop+altDelta};
+        this.defaultSecond = {...hBarDefault, top:secondTop};
+        this.altSecond = {...hBarAlt, top:secondTop+altDelta};
+        this.defaultThird = {...hBarDefault, top:thirdTop};
+        this.altThird = {...hBarAlt, top:thirdTop+altDelta};
+        this.firstBar = new RimmedBar({...hBarInit, ...this.defaultFirst});
+        this.secondBar = new RimmedBar({...hBarInit, ...this.defaultSecond});
+        this.thirdBar = new RimmedBar({...hBarInit, ...this.defaultThird});
+        this.rectRimGroup.appendChild(this.firstBar);
+        this.rectRimGroup.appendChild(this.secondBar);
+        this.rectRimGroup.appendChild(this.thirdBar);
+    }
+    downState() {
+        super.downState();
+        this.firstBar.assignStyles(this.altFirst);
+        this.secondBar.assignStyles(this.altSecond);
+        this.thirdBar.assignStyles(this.altThird);
+    }
+    upState() {
+        super.upState();
+        this.firstBar.assignStyles(this.defaultFirst);
+        this.secondBar.assignStyles(this.defaultSecond);
+        this.thirdBar.assignStyles(this.defaultThird);
     }
 }
 
@@ -236,13 +317,13 @@ class ReplayButton extends CircleButton {
         this.circleRimGroup.appendChild(this.shadow);
         this.circleRimGroup.appendChild(this.triangle);
     }
-    init() {this.initElements({barRimSide:LEFT, barLeft:11, triangleOrientation:LEFT, triangleLeft:16});}
+    init() {this.initElements({barRimSide:LEFT, barLeft:14, triangleOrientation:LEFT, triangleLeft:19});}
     initElements(initOptions) {
         const {barRimSide, barLeft, triangleOrientation, triangleLeft} = initOptions;
         this.vBar = new RimmedBar({...IAPlayer.vBarInit, ...IAPlayer.vBarDefault, rimSide:barRimSide, left:barLeft});
-        const triangleOptions = {orientation:triangleOrientation, width:IAPlayer.TRIANGLE_WIDTH, height:IAPlayer.TRIANGLE_HEIGHT};
-        this.defaultShadow = {colorHex:SHADOW_UP_HEX, left:triangleLeft, top:IAPlayer.CIRCLE_ICON_DEFAULT_TOP};
-        this.altShadow = {colorHex: SHADOW_DOWN_HEX, left:triangleLeft, top:IAPlayer.CIRCLE_ICON_ALT_TOP};
+        const triangleOptions = {orientation:triangleOrientation, width:15, height:19};
+        this.defaultShadow = {color:SHADOW_UP_HEX, left:triangleLeft, top:IAPlayer.CIRCLE_ICON_DEFAULT_TOP};
+        this.altShadow = {color:SHADOW_DOWN_HEX, left:triangleLeft, top:IAPlayer.CIRCLE_ICON_ALT_TOP};
         this.shadow = new TriangleShadow({...triangleOptions, ...this.defaultShadow});
         this.defaultTriangle = {
             color: getGradient('iconUp', [ICON_UP_TOP_HEX, ICON_UP_BOTTOM_HEX], TOP_TO_BOTTOM),
@@ -259,14 +340,14 @@ class ReplayButton extends CircleButton {
     downState() {
         super.downState();
         this.vBar.assignStyles(IAPlayer.vBarAlt);
-        this.shadow.colorAndTranslate(this.altShadow);
-        this.triangle.colorAndTranslate(this.altTriangle);
+        this.shadow.colorAndPosition(this.altShadow);
+        this.triangle.colorAndPosition(this.altTriangle);
     }
     upState() {
         super.upState();
         this.vBar.assignStyles(IAPlayer.vBarDefault);
-        this.shadow.colorAndTranslate(this.defaultShadow);
-        this.triangle.colorAndTranslate(this.defaultTriangle);
+        this.shadow.colorAndPosition(this.defaultShadow);
+        this.triangle.colorAndPosition(this.defaultTriangle);
     }
 }
 
@@ -274,8 +355,8 @@ class PauseButton extends CircleButton {
     constructor(options) {
         const {upFunction, diameter, left, top} = options;
         super({upFunction, width:diameter, height:diameter, left, top});
-        const leftBarLeft = 17;
-        const rightBarLeft = leftBarLeft + 9;
+        const leftBarLeft = 18;
+        const rightBarLeft = leftBarLeft + 7;
         this.leftBar = new RimmedBar({...IAPlayer.vBarInit, ...IAPlayer.vBarDefault, rimSide:LEFT, left:leftBarLeft});
         this.rightBar = new RimmedBar({...IAPlayer.vBarInit, ...IAPlayer.vBarDefault, rimSide:RIGHT, left:rightBarLeft});
         this.circleRimGroup.appendChild(this.leftBar);
@@ -297,20 +378,22 @@ class PlayButton extends CircleButton {
     constructor(options) {
         const {upFunction, diameter, left, top} = options;
         super({upFunction, width:diameter, height:diameter, left, top});
-        const triangleLeft = 18.5;
-        const triangleOptions = {orientation:RIGHT, width:IAPlayer.TRIANGLE_WIDTH, height:IAPlayer.TRIANGLE_HEIGHT};
-        this.defaultShadow = {colorHex:SHADOW_UP_HEX, left:triangleLeft, top:IAPlayer.CIRCLE_ICON_DEFAULT_TOP};
-        this.altShadow = {colorHex:SHADOW_DOWN_HEX, left:triangleLeft, top:IAPlayer.CIRCLE_ICON_ALT_TOP};
+        const defaultTop = IAPlayer.CIRCLE_ICON_DEFAULT_TOP - 2;
+        const altTop = IAPlayer.CIRCLE_ICON_ALT_TOP - 2;
+        const triangleLeft = 18;
+        const triangleOptions = {orientation:RIGHT, width:18, height:23};
+        this.defaultShadow = {color:SHADOW_UP_HEX, left:triangleLeft, top:defaultTop};
+        this.altShadow = {color:SHADOW_DOWN_HEX, left:triangleLeft, top:altTop};
         this.shadow = new TriangleShadow({...triangleOptions, ...this.defaultShadow});
         this.defaultTriangle = {
             color: getGradient('iconUp', [ICON_UP_TOP_HEX, ICON_UP_BOTTOM_HEX], TOP_TO_BOTTOM),
             left: triangleLeft,
-            top: IAPlayer.CIRCLE_ICON_DEFAULT_TOP
+            top: defaultTop
         }
         this.altTriangle = {
             color: getGradient('iconDown', [ICON_DOWN_TOP_HEX, ICON_DOWN_BOTTOM_HEX], TOP_TO_BOTTOM),
             left: triangleLeft,
-            top: IAPlayer.CIRCLE_ICON_ALT_TOP
+            top: altTop
         }
         this.triangle = new AcuteTriangle({...triangleOptions, ...this.defaultTriangle});
         this.circleRimGroup.appendChild(this.shadow);
@@ -318,17 +401,17 @@ class PlayButton extends CircleButton {
     }
     downState() {
         super.downState();
-        this.shadow.colorAndTranslate(this.altShadow);
-        this.triangle.colorAndTranslate(this.altTriangle);
+        this.shadow.colorAndPosition(this.altShadow);
+        this.triangle.colorAndPosition(this.altTriangle);
     }
     upState() {
         super.upState();
-        this.shadow.colorAndTranslate(this.defaultShadow);
-        this.triangle.colorAndTranslate(this.defaultTriangle);
+        this.shadow.colorAndPosition(this.defaultShadow);
+        this.triangle.colorAndPosition(this.defaultTriangle);
     }
 }
 
 class SkipButton extends ReplayButton {
     constructor(options) {super(options);}
-    init() {this.initElements({barRimSide:RIGHT, barLeft:32, triangleOrientation:RIGHT, triangleLeft:14});}
+    init() {this.initElements({barRimSide:RIGHT, barLeft:29, triangleOrientation:RIGHT, triangleLeft:14});}
 }

@@ -4,7 +4,7 @@ import { IAPlayer } from './IAPlayer.js';
 class Main {
     constructor() {
         this.engineDiv = document.getElementById('engineDiv');
-        this.engine = new IAEngine('InteractiveAudioDemo_JS');
+        this.engine = new IAEngine('InteractiveAudioDemo_HTML');
         this.engine.style.transform = `translateX(${IAPlayer.PLAYER_WIDTH/-2}px)`;
         this.initEngine();
         this.scaleEngine();
@@ -27,7 +27,7 @@ class Main {
         this.engineDiv.style.transform = `scale(${scaleValue})`;
     }
     execEngine() {
-        //this.engine.exec();
+        this.engine.exec();
     }
 }
 
