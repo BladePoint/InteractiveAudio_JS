@@ -1,12 +1,15 @@
 import { UIElement } from '../UserInterface_JS/UIElement.js';
+import { UIButton } from '../UserInterface_JS/UIButton.js';
 import { ShadedRect, GlassPanel, RectButton, CircleButton,
-         TriangleShadow, RimmedBar, DoubleProgressSeekBar,
+         TriangleShadow, RimmedBar, DoubleProgressSeekBar, TransitionRect,
          RIM_HEX, SHADOW_UP_HEX, SHADOW_DOWN_HEX, ICON_UP_TOP_HEX, ICON_UP_BOTTOM_HEX, ICON_DOWN_TOP_HEX, ICON_DOWN_BOTTOM_HEX,
          BAR_SHADOW_DEFAULT, BAR_SHADOW_ALT, BAR_RECT_DEFAULT, BAR_RECT_ALT } from '../UserInterface_JS/iPlayer.js';
 import { TextField } from '../UserInterface_JS/TextField.js';
 import { AcuteTriangle, Rectangle, getGradient } from '../UserInterface_JS/Primitives.js';
 import { secondsToHHMMSS } from '../Utilities_JS/mathUtils.js';
 import { LEFT, RIGHT, UP, NONE, LEFT_TO_RIGHT, RIGHT_TO_LEFT, TOP_TO_BOTTOM, BOTTOM_TO_TOP } from '../Utilities_JS/constants.js';
+import { IAEngine } from './IAEngine.js';
+import { Main } from './Main.js';
 
 export class IAPlayer extends UIElement {
     static PLAYER_WIDTH = 352;
@@ -18,6 +21,7 @@ export class IAPlayer extends UIElement {
     static STATE_DONE = 'stateDone';
     static CIRCLE_ICON_DEFAULT_TOP = 14;
     static CIRCLE_ICON_ALT_TOP = IAPlayer.CIRCLE_ICON_DEFAULT_TOP + .25;
+    static rectButton = {width:44, height:32, left:6, top:15};
     static vBarInit = {width:5, height:20, barHex:BAR_RECT_DEFAULT};
     static vBarDefault = {background:BAR_SHADOW_DEFAULT, barHex:BAR_RECT_DEFAULT, top:IAPlayer.CIRCLE_ICON_DEFAULT_TOP};
     static vBarAlt = {background:BAR_SHADOW_ALT, barHex:BAR_RECT_ALT, top:IAPlayer.CIRCLE_ICON_ALT_TOP};
@@ -31,29 +35,28 @@ export class IAPlayer extends UIElement {
         const titleGlassWidth = IAPlayer.PLAYER_WIDTH - titleGlassLeft*2;
         const sceneGlassLeft = 108;
         const sceneGlassWidth = IAPlayer.PLAYER_WIDTH - sceneGlassLeft*2;
-        const rectButtonWidth = 44;
-        const rectButtonHeight = 32;
-        const rectButtonLeft = 6;
-        const rectButtonTop = 15;
         const circleButtonLeft = 4;
         const circleButtonTop = 51;
+        this.assignStyles({width:IAPlayer.PLAYER_WIDTH, height:IAPlayer.PLAYER_HEIGHT});
         const createBackground = () => {
             this.shadedRect = new ShadedRect({width:IAPlayer.PLAYER_WIDTH, height:IAPlayer.PLAYER_HEIGHT});
-            this.titleGlass = new GlassPanel({width:titleGlassWidth, height:32, left:titleGlassLeft, top:rectButtonTop});
+            this.titleGlass = new GlassPanel({width:titleGlassWidth, height:32, left:titleGlassLeft, top:IAPlayer.rectButton.top});
             this.sceneGlass = new GlassPanel({width:sceneGlassWidth, height:26, left:sceneGlassLeft, top:circleButtonTop, rimHex:'#dddddd'});
         }
         const createRectButtons = () => {
+            const rectButton = IAPlayer.rectButton;
             this.resetButton = new ResetButton({
-                width: rectButtonWidth,
-                height: rectButtonHeight,
-                left: rectButtonLeft,
-                top: rectButtonTop
+                width: rectButton.width,
+                height: rectButton.height,
+                left: rectButton.left,
+                top: rectButton.top
             });
             this.optionsButton = new OptionsButton({
-                width: rectButtonWidth,
-                height: rectButtonHeight,
-                left: IAPlayer.PLAYER_WIDTH - rectButtonWidth - rectButtonLeft,
-                top: rectButtonTop
+                upFunction: this.optionsCallback,
+                width: rectButton.width,
+                height: rectButton.height,
+                left: IAPlayer.PLAYER_WIDTH - rectButton.width - rectButton.left,
+                top: rectButton.top
             });
             this.resetButton.enable();
             this.optionsButton.enable();
@@ -94,17 +97,24 @@ export class IAPlayer extends UIElement {
             });
         }
         const createText = () => {
-            this.iae = new TextField({
+            const iaeDimensions = {width:117, height:11, left:(IAPlayer.PLAYER_WIDTH - 117)/2, top:2};
+            const iae = new TextField({
                 text: 'Interactive Audio Engine',
-                width: IAPlayer.PLAYER_WIDTH,
+                width: iaeDimensions.width,
+                height: iaeDimensions.height,
                 fontFamily: 'Arial, sans-serif',
                 fontWeight: 'bold',
                 fontSize: 10,
                 color: '#000000',
                 textAlign: 'center',
-                top: 2,
+                left: iaeDimensions.left,
+                top: iaeDimensions.top
             });
-            this.iae.style.textShadow = '1px 1px 0px #ffffff';
+            iae.style.textShadow = '1px 1px 0px #ffffff';
+            iae.style.overflow = 'visible';
+            this.iae = new UIButton(iae, null, this.iaeCallback);
+            this.iae.buttonDimensions = iaeDimensions;
+            this.iae.enable();
             this.titleText = new TextField({
                 width: titleGlassWidth - 2,
                 fontFamily: 'Consolas, monospace',
@@ -112,7 +122,7 @@ export class IAPlayer extends UIElement {
                 fontSize: 18,
                 textAlign: 'center',
                 color: '#000000',
-                top: rectButtonTop + 9,
+                top: IAPlayer.rectButton.top + 9,
                 left: titleGlassLeft + 1
             });
             this.sceneText = new TextField({
@@ -139,7 +149,7 @@ export class IAPlayer extends UIElement {
                 fontSize: 10,
                 textAlign: 'right',
                 color: '#000000',
-                right: 2 - sceneGlassLeft - sceneGlassWidth,
+                right: sceneGlassLeft + 2,
                 top: IAPlayer.PLAYER_HEIGHT - 14
             });
         }
@@ -164,7 +174,6 @@ export class IAPlayer extends UIElement {
         this.appendChild(this.totalText);
         this.appendChild(this.doubleProgressSeekBar);
         this.notReadyState();
-        //this.disablePlayer();
     }
     setTitleText(newText) {this.titleText.text = this.cleanText(newText);}
     setSceneText(newText) {this.sceneText.text = this.cleanText(newText);}
@@ -175,10 +184,6 @@ export class IAPlayer extends UIElement {
     setLoadProgress(percent) {this.doubleProgressSeekBar.rearProgress = percent;}
     setPlayProgress(percent) {this.doubleProgressSeekBar.frontProgress = percent;}
     cleanText(text) {return text.replace(/\n/g, '');} // Replace carriage returns with nothing.
-    disablePlayer() {
-        this.style.filter = 'brightness(50%)';
-
-    }
     notReadyState() {
         this.replayButton.disable();
         this.pauseButton.disable();
@@ -203,6 +208,35 @@ export class IAPlayer extends UIElement {
         this.pauseButton.disable();
         this.playButton.disable();
         this.skipButton.disable();
+    }
+    iaeCallback = (iae) => {
+        IAEngine.popup(this.iae, this.credits);
+    }
+    get credits() {
+        if (this._credits === undefined) {
+            const width = 258;
+            this._credits = new ShadedRect({
+                width,
+                height: 110,
+                left: (IAPlayer.PLAYER_WIDTH - width) / 2,
+                top: 15
+            });
+            const textField = new TextField({textAlign:'center', left:'50%', top:0, transform:'translate(-50%)'});
+            textField.htmlText = `
+                <span style="font-size:12px">created by</span><br>
+                <span style="font-weight:bold">BladePoint</span><br>
+                <span style="font-size:12px; display:inline-block; margin-top:10px">support me at:</span><br>
+                <a href="https://www.patreon.com/BladePoint" target="_blank" style="font-family:'Segoe UI','San Francisco',sans-serif">www.patreon.com/BladePoint</a><br>
+                <a href="https://www.subscribestar.com/bladepoint " target="_blank" style="font-family:'Segoe UI','San Francisco',sans-serif">www.subscribestar.com/bladepoint</a>
+            `;
+            textField.enable();
+            this._credits.appendChild(textField);
+            this._credits.enable();
+        }
+        return this._credits;
+    }
+    optionsCallback = (optionsButton) => {
+        IAEngine.popup(optionsButton, optionsButton.menu);
     }
     replayCallback = () => {
         this.playState();
@@ -293,6 +327,19 @@ class OptionsButton extends RectButton {
         this.rectRimGroup.appendChild(this.firstBar);
         this.rectRimGroup.appendChild(this.secondBar);
         this.rectRimGroup.appendChild(this.thirdBar);
+    }
+    get menu() {
+        if (this._menu === undefined) {
+            const {width, height, left, top} = IAPlayer.rectButton;
+            this._menu = new ShadedRect({
+                width: IAPlayer.PLAYER_WIDTH - (left+top)*2,
+                height: 100,
+                left: left + top,
+                top: top + left
+            });
+            this._menu.enable();
+        }
+        return this._menu;
     }
     downState() {
         super.downState();

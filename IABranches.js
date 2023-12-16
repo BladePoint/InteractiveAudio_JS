@@ -3,14 +3,15 @@ import { UIElement } from '../UserInterface_JS/UIElement.js';
 import { ShadedArrowBar, GlassPanel } from '../UserInterface_JS/iPlayer.js';
 import { Button3State } from '../UserInterface_JS/UIButton.js'
 import { TextField } from '../UserInterface_JS/TextField.js';
-import { Tween } from '../../frameworks/Utilities_JS/Tween.js';
+import { Tween } from '../Utilities_JS/Tween.js';
 
 export class IABranches extends UIElement {
     static CHOSEN = 'chosen';
     constructor(options) {
         super();
-        const {width, left=0, top=0} = options;
+        const {width, left=0, top=0, onSelect} = options;
         this.assignStyles({width, left, top});
+        this.onSelect = onSelect;
         const offset = 10;
         ChoiceButton.choiceStyle = {width:width-offset*2, height:44, left:offset};
         this.buttonArray = [];
@@ -23,7 +24,10 @@ export class IABranches extends UIElement {
         let displayedCount = 0;
         const testDisplayed = () => {
             displayedCount++;
-            if (displayedCount === l) this.buttonArray.forEach(choiceButton => {choiceButton.enable();});
+            if (displayedCount === l) this.buttonArray.forEach(choiceButton => {
+                choiceButton.unsuspend();
+                choiceButton.testState();
+            });
         }
         for (let i=0; i<l; i++) {
             const choiceButton = this.buttonArray[i];
@@ -34,6 +38,7 @@ export class IABranches extends UIElement {
         }
     }
     onChoice(chosenButton) {
+        this.onSelect();
         chosenButton.removeMouseListeners();
         chosenButton.hoverState();
         const l = this.buttonArray.length;
@@ -73,7 +78,8 @@ class ChoiceButton extends Button3State {
             choiceButton = ChoiceButton.pool.pop();
             choiceButton.parseChoice(choice);
         } else choiceButton = new ChoiceButton(choice, onChoice);
-        choiceButton.disable();
+        choiceButton.enable();
+        choiceButton.suspend();
         choiceButton.style.opacity = '0';
         return choiceButton;
     }

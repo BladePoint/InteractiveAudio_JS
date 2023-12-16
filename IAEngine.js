@@ -1,10 +1,13 @@
-import { UIElement } from '../../frameworks/UserInterface_JS/UIElement.js';
-import { AssetLoader } from '../../frameworks/Utilities_JS/AssetLoader.js';
-import { AudioManager } from '../../frameworks/Utilities_JS/AudioManager.js';
-import { Variables } from '../../frameworks/Utilities_JS/Variables.js';
-import { COMPLETE } from '../../frameworks/Utilities_JS/constants.js';
+import { UIButton } from '../UserInterface_JS/UIButton.js';
+import { UIElement } from '../UserInterface_JS/UIElement.js';
+import { TransitionRect } from '../UserInterface_JS/iPlayer.js';
+import { AssetLoader } from '../Utilities_JS/AssetLoader.js';
+import { AudioManager } from '../Utilities_JS/AudioManager.js';
+import { Variables } from '../Utilities_JS/Variables.js';
+import { COMPLETE, BLOCK, NONE } from '../Utilities_JS/constants.js';
 import { IAPlayer } from './IAPlayer.js';
 import { IABranches } from './IABranches.js';
+import { Main } from './Main.js';
 
 export class IAEngine extends UIElement {
     static COMPLETE_LOAD_SCRIPT = 'completeLoadScript';
@@ -258,6 +261,47 @@ export class IAEngine extends UIElement {
         console.log(`${indent}Variable "${varID}" has a current value of "${testValue}".`);
         return result;
     }
+    static transitionRect = null;
+    static popup(button, menu) {
+        const overlayDiv = Main.overlayDiv;
+        overlayDiv.style.display = BLOCK;
+        overlayDiv.style.opacity = 0;
+        const popupDiv = Main.popupDiv;
+        popupDiv.style.display = BLOCK;
+        if (IAEngine.transitionRect === null) IAEngine.transitionRect = new TransitionRect({});
+        const transitionRect = IAEngine.transitionRect;
+        transitionRect.assignStyles({transform:Main.transform});
+        transitionRect.appendToParent(popupDiv);
+        const onIn = () => {
+            transitionRect.style.display = NONE;
+            menu.style.transform = Main.transform;
+            menu.appendToParent(popupDiv);
+            overlayDiv.style.opacity = .5;
+            overlayDiv.addEventListener(UIButton.MOUSE_DOWN, overlayCallback);
+        }
+        const overlayCallback = () => {
+            overlayDiv.removeEventListener(UIButton.MOUSE_DOWN, overlayCallback);
+            overlayDiv.style.opacity = 0;
+            menu.removeFromParent(popupDiv);
+            transitionRect.style.display = BLOCK;
+            transitionRect.transitionTo({
+                startObject: menu,
+                endObject: button,
+                onUpdate: progress => {overlayDiv.style.opacity = .5 - progress/2;},
+                onComplete: onOut
+            });
+        }
+        const onOut = () => {
+            overlayDiv.style.display = NONE;
+            transitionRect.removeFromParent(popupDiv);
+        }
+        transitionRect.transitionTo({
+            startObject: button,
+            endObject: menu,
+            onUpdate: progress => {overlayDiv.style.opacity = progress/2;},
+            onComplete: onIn
+        });
+    }
 
     constructor(projectName) {
         super();
@@ -268,7 +312,7 @@ export class IAEngine extends UIElement {
         this.player.playFunction = this.pressPlay;
         this.player.skipFunction = this.pressSkip;
         this.appendChild(this.player);
-        this.branches = new IABranches({width:IAPlayer.PLAYER_WIDTH, top:IAPlayer.PLAYER_HEIGHT+10});
+        this.branches = new IABranches({width:IAPlayer.PLAYER_WIDTH, top:IAPlayer.PLAYER_HEIGHT+10, onSelect:this.pressSkip});
         this.appendChild(this.branches);
         this.assetLoader = new AssetLoader({
             requestLogFunction: this.requestLog,
@@ -290,41 +334,58 @@ export class IAEngine extends UIElement {
         this.firstAudio = true;
     }
     pressReplay = () => {
-        this.player.notReadyState();
         const vo = this.voCurrent;
-        this.removeEndListenerFromVo(vo);
-        AudioManager.fadeOut(vo, 200, () => {
+        const cleanVo = () => {
             this.removeUpdateListenerFromVo(vo);
             vo.currentTime = 0;
+        }
+        const replay = () => {
             this.promptIndex = 0;
             this.cumulativeTime = 0;
             this.player.setProgressToZero();
             this.playPromptVo();
-        });
+        }
+        if (vo) {
+            this.removeEndListenerFromVo(vo);
+            if (vo.paused) {
+                cleanVo();
+                replay();
+            } else {
+                this.player.notReadyState();
+                AudioManager.fadeOut(vo, 200, () => {
+                    cleanVo();
+                    replay();
+                });
+            }
+        } else replay();
     }
     pressPause = () => {
-        const vo = this.voCurrent;
-        if (vo) {
-            this.player.pauseState();
-            vo.pause();
-        }
+        this.player.pauseState();
+        this.voCurrent.pause();
     }
     pressPlay = () => {
-        const voCurrent = this.voCurrent;
-        if (voCurrent && voCurrent.paused) voCurrent.play();
+        const vo = this.voCurrent;
+        if (vo) vo.play();
         else this.playPromptVo();
     }
     pressSkip = () => {
-        this.player.notReadyState();
         const vo = this.voCurrent;
-        this.removeEndListenerFromVo(vo);
-        AudioManager.fadeOut(vo, 200, () => {
+        const skip = () => {
             this.removeUpdateListenerFromVo(vo);
             vo.currentTime = 0;
+            this.voCurrent = null;
             this.player.doneState();
             this.player.setProgressToTotal();
             this.dispatchEventWith(IAEngine.COMPLETE_PLAY_PROMPT);
-        });
+        }
+        if (vo) {
+            this.removeEndListenerFromVo(vo);
+            if (vo.paused) skip();
+            else {
+                this.player.notReadyState();
+                AudioManager.fadeOut(vo, 200, skip);
+            }
+        }
     }
     exec() {
         this.addEventListener(IAEngine.COMPLETE_LOAD_SCRIPT, this.onLoadScript);
@@ -544,6 +605,7 @@ export class IAEngine extends UIElement {
         this.removeEndListenerFromVo(vo);
         vo.currentTime = 0;
         this.cumulativeTime += vo.duration;
+        this.voCurrent = null;
         this.promptIndex++;
         this.playPromptVo();
     }
