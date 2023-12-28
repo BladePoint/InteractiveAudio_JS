@@ -5,6 +5,7 @@ import { AssetLoader } from '../Utilities_JS/AssetLoader.js';
 import { AudioManager } from '../Utilities_JS/AudioManager.js';
 import { Variables } from '../Utilities_JS/Variables.js';
 import { COMPLETE, BLOCK, NONE } from '../Utilities_JS/constants.js';
+import { loadLocalStorage, saveLocalStorage } from '../Utilities_JS/genUtils.js';
 import { IAPlayer } from './IAPlayer.js';
 import { IABranches } from './IABranches.js';
 import { Main } from './Main.js';
@@ -42,6 +43,7 @@ export class IAEngine extends UIElement {
     static INDENT_TWO = `${IAEngine.INDENT_ONE}${IAEngine.INDENT_ONE}`;
     static INDENT_THREE = `${IAEngine.INDENT_ONE}${IAEngine.INDENT_ONE}${IAEngine.INDENT_ONE}`;
     static INDENT_FOUR = `${IAEngine.INDENT_ONE}${IAEngine.INDENT_ONE}${IAEngine.INDENT_ONE}${IAEngine.INDENT_ONE}`;
+    static LOCAL_STORAGE_KEY = 'InteractiveAudioEngine';
     static getScene(sceneID, script) {
         const sceneList = script.querySelectorAll(`Scenes ${IAEngine.ELEMENT_SCENE}[id="${sceneID}"]`);
         const l = sceneList.length;
@@ -274,7 +276,7 @@ export class IAEngine extends UIElement {
         transitionRect.appendToParent(popupDiv);
         const onIn = () => {
             transitionRect.style.display = NONE;
-            menu.style.transform = Main.transform;
+            menu.init();
             menu.appendToParent(popupDiv);
             overlayDiv.style.opacity = .5;
             overlayDiv.addEventListener(UIButton.MOUSE_DOWN, overlayCallback);
@@ -283,6 +285,7 @@ export class IAEngine extends UIElement {
             overlayDiv.removeEventListener(UIButton.MOUSE_DOWN, overlayCallback);
             overlayDiv.style.opacity = 0;
             menu.removeFromParent(popupDiv);
+            menu.fini();
             transitionRect.style.display = BLOCK;
             transitionRect.transitionTo({
                 startObject: menu,
@@ -306,13 +309,15 @@ export class IAEngine extends UIElement {
     constructor(projectName) {
         super();
         this.projectName = projectName;
-        this.player = new IAPlayer();
-        this.player.replayFunction = this.pressReplay;
-        this.player.pauseFunction = this.pressPause;
-        this.player.playFunction = this.pressPlay;
-        this.player.skipFunction = this.pressSkip;
+        this.player = new IAPlayer({
+            getMasterVolume:this.getMasterVolume, setMasterVolume:this.setMasterVolume,
+            getVoVolume:this.getVoVolume, setVoVolume:this.setVoVolume,
+            getBgmVolume:this.getBgmVolume, setBgmVolume:this.setBgmVolume,
+            saveSettings: () => {saveLocalStorage(IAEngine.LOCAL_STORAGE_KEY, this.settings)},
+            replayLogic:this.replayLogic, pauseLogic:this.pauseLogic, playLogic:this.playLogic, skipLogic:this.skipLogic
+        });
         this.appendChild(this.player);
-        this.branches = new IABranches({width:IAPlayer.PLAYER_WIDTH, top:IAPlayer.PLAYER_HEIGHT+10, onSelect:this.pressSkip});
+        this.branches = new IABranches({width:IAPlayer.PLAYER_WIDTH, top:IAPlayer.PLAYER_HEIGHT+10, onSelect:this.skipLogic});
         this.appendChild(this.branches);
         this.assetLoader = new AssetLoader({
             requestLogFunction: this.requestLog,
@@ -332,8 +337,15 @@ export class IAEngine extends UIElement {
         this.cumulativeTime;
         this.totalTime;
         this.firstAudio = true;
+        this.settings = loadLocalStorage(IAEngine.LOCAL_STORAGE_KEY, {masterVolume:1, voVolume:1, bgmVolume:1});
     }
-    pressReplay = () => {
+    getMasterVolume = () =>{return this.settings.masterVolume;}
+    setMasterVolume = (decimal) =>{this.settings.masterVolume = decimal;}
+    getVoVolume = () =>{return this.settings.voVolume;}
+    setVoVolume = () =>{}
+    getBgmVolume = () =>{return this.settings.bgmVolume;}
+    setBgmVolume = () =>{}
+    replayLogic = () => {
         const vo = this.voCurrent;
         const cleanVo = () => {
             this.removeUpdateListenerFromVo(vo);
@@ -359,16 +371,16 @@ export class IAEngine extends UIElement {
             }
         } else replay();
     }
-    pressPause = () => {
+    pauseLogic = () => {
         this.player.pauseState();
         this.voCurrent.pause();
     }
-    pressPlay = () => {
+    playLogic = () => {
         const vo = this.voCurrent;
         if (vo) vo.play();
         else this.playPromptVo();
     }
-    pressSkip = () => {
+    skipLogic = () => {
         const vo = this.voCurrent;
         const skip = () => {
             this.removeUpdateListenerFromVo(vo);
@@ -418,6 +430,7 @@ export class IAEngine extends UIElement {
     }
     onLoadScript() {
         this.removeEventListener(IAEngine.COMPLETE_LOAD_SCRIPT,this.onLoadScript);
+        this.player.setInfoText(this.script.querySelector('Info').textContent.trim());
         this.player.setTitleText(this.script.querySelector('InteractiveAudioAdventure').getAttribute('title'));
         this.parseScript();
     }
@@ -588,6 +601,7 @@ export class IAEngine extends UIElement {
             vo.addEventListener('timeupdate', this.updateVo);
             vo.addEventListener('ended', this.endedVo);
             console.log(`${IAEngine.INDENT_ONE}Playing VO "${vo.getAttribute(IAEngine.ATTRIBUTE_FILE)}".`);
+            vo.volume = this.settings.masterVolume * this.settings.voVolume;
             vo.play();
         } else {
             this.player.doneState();
@@ -596,7 +610,7 @@ export class IAEngine extends UIElement {
     }
     updateVo = (evt) => {
         const progressTime = this.cumulativeTime + evt.target.currentTime;
-        this.player.setPlayProgress(progressTime / this.totalTime * 100);
+        this.player.setPlayProgress(progressTime / this.totalTime);
         this.player.setProgressTime(progressTime);
     }
     endedVo = (evt) => {

@@ -2,9 +2,14 @@ import { IAEngine } from './IAEngine.js';
 import { IAPlayer } from './IAPlayer.js';
 
 export class Main {
+    static instantiate() {
+        document.removeEventListener('DOMContentLoaded', Main.instantiate);
+        new Main();
+    }
     static engineDiv = document.getElementById('engineDiv');
     static overlayDiv = document.getElementById('overlayDiv');
     static popupDiv = document.getElementById('popupDiv');
+    static scaleValue = undefined;
     static transform = null;
     constructor() {
         this.engine = new IAEngine('InteractiveAudioDemo_HTML');
@@ -17,26 +22,23 @@ export class Main {
         this.engine.appendToParent(Main.engineDiv);
     }
     scaleEngine() {
-        let scaleValue;
         const isLandscape = window.matchMedia("(orientation: landscape)").matches;
         if (isLandscape) {
             const percentageWidth = window.innerWidth * .2;
-            scaleValue = Math.max(1, percentageWidth / IAPlayer.PLAYER_WIDTH);
+            Main.scaleValue = Math.max(1, percentageWidth / IAPlayer.PLAYER_WIDTH);
         } else {
             const maxWidth = window.innerWidth - 20;
-            scaleValue = maxWidth / IAPlayer.PLAYER_WIDTH;
+            Main.scaleValue = maxWidth / IAPlayer.PLAYER_WIDTH;
         }
         //scaleValue = 1; //temp
-        Main.engineDiv.style.transform = Main.popupDiv.style.transform = `scale(${scaleValue})`;
+        Main.engineDiv.style.transform = Main.popupDiv.style.transform = `scale(${Main.scaleValue})`;
     }
     execEngine() {
         this.engine.exec();
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    new Main();
-});
-document.addEventListener('dragstart', event => {
-    event.preventDefault();
+document.addEventListener('DOMContentLoaded', Main.instantiate);
+document.addEventListener('dragstart', (evt) => {
+    evt.preventDefault();
 });

@@ -125,6 +125,7 @@ class ChoiceButton extends Button3State {
         this.glassPanel.setLevel(GlassPanel.LOW);
     }
     downState() {
+        this.shadedArrowBar.altState();
         this.glassPanel.setLevel(GlassPanel.HIGH);
     }
     flash(numberOfTimes, duration, onComplete=noop) {
