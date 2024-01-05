@@ -279,10 +279,10 @@ export class IAEngine extends UIElement {
             menu.init();
             menu.appendToParent(popupDiv);
             overlayDiv.style.opacity = .5;
-            overlayDiv.addEventListener(UIButton.MOUSE_DOWN, overlayCallback);
+            overlayDiv.addEventListener(UIButton.POINTER_DOWN, overlayCallback);
         }
         const overlayCallback = () => {
-            overlayDiv.removeEventListener(UIButton.MOUSE_DOWN, overlayCallback);
+            overlayDiv.removeEventListener(UIButton.POINTER_DOWN, overlayCallback);
             overlayDiv.style.opacity = 0;
             menu.removeFromParent(popupDiv);
             menu.fini();
@@ -337,34 +337,48 @@ export class IAEngine extends UIElement {
         this.cumulativeTime;
         this.totalTime;
         this.firstAudio = true;
+        this.audioManager = new AudioManager();
+        this.audioManager.addTrack(AudioManager.VO);
         this.settings = loadLocalStorage(IAEngine.LOCAL_STORAGE_KEY, {masterVolume:1, voVolume:1, bgmVolume:1});
+        this.setMasterVolume(this.settings.masterVolume);
+        this.setVoVolume(this.settings.voVolume);
+        this.setBgmVolume(this.settings.bgmVolume);
     }
     getMasterVolume = () =>{return this.settings.masterVolume;}
-    setMasterVolume = (decimal) =>{this.settings.masterVolume = decimal;}
+    setMasterVolume = (decimal) =>{
+        this.settings.masterVolume = decimal;
+        this.audioManager.settingVolume = decimal;
+    }
     getVoVolume = () =>{return this.settings.voVolume;}
-    setVoVolume = () =>{}
+    setVoVolume = (decimal) =>{
+        this.settings.voVolume = decimal;
+        //this.audioManager.setTrackVolume(AudioManager.VO, decimal);
+    }
     getBgmVolume = () =>{return this.settings.bgmVolume;}
-    setBgmVolume = () =>{}
+    setBgmVolume = (decimal) =>{
+        this.settings.bgmVolume = decimal;
+        //this.audioManager.setTrackVolume(AudioManager.BGM, decimal);
+    }
     replayLogic = () => {
         const vo = this.voCurrent;
         const cleanVo = () => {
-            this.removeUpdateListenerFromVo(vo);
+            vo.removeUpdateListener();
             vo.currentTime = 0;
         }
         const replay = () => {
             this.promptIndex = 0;
             this.cumulativeTime = 0;
-            this.player.setProgressToZero();
+            this.player.setPlayProgressToZero();
             this.playPromptVo();
         }
         if (vo) {
-            this.removeEndListenerFromVo(vo);
+            vo.removeEndListener();
             if (vo.paused) {
                 cleanVo();
                 replay();
             } else {
                 this.player.notReadyState();
-                AudioManager.fadeOut(vo, 200, () => {
+                AudioManager.fadeOutAudio(vo, 200, () => {
                     cleanVo();
                     replay();
                 });
@@ -380,23 +394,21 @@ export class IAEngine extends UIElement {
         if (vo) vo.play();
         else this.playPromptVo();
     }
-    skipLogic = () => {
+    skipLogic = (evt) => {
         const vo = this.voCurrent;
         const skip = () => {
-            this.removeUpdateListenerFromVo(vo);
+            vo.removeUpdateListener();
             vo.currentTime = 0;
             this.voCurrent = null;
-            this.player.doneState();
-            this.player.setProgressToTotal();
+            if (evt) this.player.doneState();//evt exists if skipLogic was called by the skip button. If not, it was called by IABranches
+            this.player.setPlayProgressToTotal();
             this.dispatchEventWith(IAEngine.COMPLETE_PLAY_PROMPT);
         }
+        this.player.notReadyState();
         if (vo) {
-            this.removeEndListenerFromVo(vo);
+            vo.removeEndListener();
             if (vo.paused) skip();
-            else {
-                this.player.notReadyState();
-                AudioManager.fadeOut(vo, 200, skip);
-            }
+            else AudioManager.fadeOutAudio(vo, 200, skip);
         }
     }
     exec() {
@@ -483,7 +495,7 @@ export class IAEngine extends UIElement {
         this.cumulativeTime = 0;
         this.totalTime = 0;
         this.player.setLoadProgress(0);
-        this.player.setPlayProgress(0);
+        this.player.notReadyState();
         IAEngine.logElement(this.currentNode, false, IAEngine.INDENT_ONE);
         this.prepParsePrompt();
     }
@@ -559,13 +571,12 @@ export class IAEngine extends UIElement {
         }
     }
     processBlobs = () => {
+        this.player.setPlayProgress(0);
         this.assetLoader.removeEventListener(COMPLETE, this.processBlobs);
-        const LOADED_METADATA = 'loadedmetadata';
         const l = this.assetLoader.blobArray.length;
         let durationCount = 0;
-        const addDuration = (evt) => {
-            const audio = evt.target;
-            audio.removeEventListener(LOADED_METADATA, addDuration);
+        const addDuration = (audio) => {
+            audio.removeMetadataListener();
             this.totalTime += audio.duration;
             durationCount++;
             if (durationCount === l) {
@@ -576,9 +587,8 @@ export class IAEngine extends UIElement {
         for (let i=0; i<l; i++) {
             const blob = this.assetLoader.blobArray[i];
             const blobUrl = URL.createObjectURL(blob);
-            const audio = this.voArray[i] = new Audio();
-            audio.setAttribute(IAEngine.ATTRIBUTE_FILE, this.promptArray[i].getAttribute(IAEngine.ATTRIBUTE_FILE));
-            audio.addEventListener(LOADED_METADATA, addDuration);
+            const audio = this.voArray[i] = this.audioManager.newAudio(this.promptArray[i].getAttribute(IAEngine.ATTRIBUTE_FILE), AudioManager.VO);
+            audio.addMetadataListener(addDuration);
             audio.src = blobUrl;
         }
         this.assetLoader.dispose();
@@ -591,43 +601,35 @@ export class IAEngine extends UIElement {
     requestLog(url) {
         console.log(`${IAEngine.INDENT_ONE}Requesting file: ${url}`);
     }
-    requestProgress = (percent) => {
-        this.player.setLoadProgress(percent);
+    requestProgress = (decimal) => {
+        this.player.setLoadProgress(decimal);
     }
     playPromptVo = () => {
         if (this.promptIndex < this.voArray.length) {
             this.player.playState();
             const vo = this.voCurrent = this.voArray[this.promptIndex];
-            vo.addEventListener('timeupdate', this.updateVo);
-            vo.addEventListener('ended', this.endedVo);
-            console.log(`${IAEngine.INDENT_ONE}Playing VO "${vo.getAttribute(IAEngine.ATTRIBUTE_FILE)}".`);
-            vo.volume = this.settings.masterVolume * this.settings.voVolume;
+            vo.addUpdateListener(this.updateVo);
+            vo.addEndListener(this.endedVo);
+            console.log(`${IAEngine.INDENT_ONE}Playing VO "${vo.id}".`);
             vo.play();
         } else {
             this.player.doneState();
             this.dispatchEventWith(IAEngine.COMPLETE_PLAY_PROMPT);
         }
     }
-    updateVo = (evt) => {
-        const progressTime = this.cumulativeTime + evt.target.currentTime;
+    updateVo = (vo) => {
+        const progressTime = this.cumulativeTime + vo.currentTime;
         this.player.setPlayProgress(progressTime / this.totalTime);
         this.player.setProgressTime(progressTime);
     }
-    endedVo = (evt) => {
-        const vo = evt.target;
-        this.removeUpdateListenerFromVo(vo);
-        this.removeEndListenerFromVo(vo);
+    endedVo = (vo) => {
+        vo.removeUpdateListener();
+        vo.removeEndListener();
         vo.currentTime = 0;
         this.cumulativeTime += vo.duration;
         this.voCurrent = null;
         this.promptIndex++;
         this.playPromptVo();
-    }
-    removeUpdateListenerFromVo(vo) {
-        vo.removeEventListener('timeupdate', this.updateVo);
-    }
-    removeEndListenerFromVo(vo) {
-        vo.removeEventListener('ended', this.endedVo);
     }
     prepParseChoice() {
         this.removeEventListener(IAEngine.COMPLETE_PLAY_PROMPT, this.prepParseChoice);

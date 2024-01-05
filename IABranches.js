@@ -1,7 +1,7 @@
 import { IAEngine } from './IAEngine.js';
 import { UIElement } from '../UserInterface_JS/UIElement.js';
 import { ShadedArrowBar, GlassPanel } from '../UserInterface_JS/iPlayer.js';
-import { Button3State } from '../UserInterface_JS/UIButton.js'
+import { Button3State, UIButton } from '../UserInterface_JS/UIButton.js'
 import { TextField } from '../UserInterface_JS/TextField.js';
 import { Tween } from '../Utilities_JS/Tween.js';
 
@@ -93,28 +93,32 @@ class ChoiceButton extends Button3State {
         const halfHeight = height / 2;
         const container = new UIElement();
         const shadedArrowBar = new ShadedArrowBar({width, height});
-        const glassPanel = new GlassPanel({width:glassWidth, height:26, colorString:GlassPanel.PURPLE, level:GlassPanel.LOW, left:halfHeight, top:9});
-        const textField = new TextField({
-            width: glassWidth,
-            fontFamily: 'Consolas, monospace',
-            fontSize: 18,
-            textAlign: 'center',
-            top: 12,
-            left: halfHeight
+        const glassPanel = new GlassPanel({
+            width:glassWidth, height:22, colorString:GlassPanel.PURPLE, level:GlassPanel.LOW,
+            fontFamily:'Consolas, monospace', fontSize:18, textTop:-11,
+            left:halfHeight, top:11
         });
         container.appendChild(shadedArrowBar)
         container.appendChild(glassPanel);
-        container.appendChild(textField);
         container.assignStyles({left, top});
         super(container, shadedArrowBar, onChoice);
         this.shadedArrowBar = shadedArrowBar;
         this.glassPanel = glassPanel;
-        this.textField = textField;
         this.parseChoice(choice);
     }
     parseChoice(choice) {
-        if (choice) this.textField.text = choice.textContent.trim();
+        if (choice) this.glassPanel.text = choice.textContent.trim();
         this.choice = choice;
+    }
+    enable() {this.pointerElement.enable();}
+    disable() {this.pointerElement.disable();}
+    onEnterLogic(evt) {
+        this.pointerElement.style.cursor = UIButton.POINTER;
+        super.onEnterLogic(evt);
+    }
+    onLeaveLogic(evt) {
+        this.pointerElement.style.cursor = UIButton.DEFAULT;
+        super.onLeaveLogic(evt);
     }
     hoverState() {
         this.shadedArrowBar.altState();
