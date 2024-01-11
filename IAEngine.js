@@ -85,12 +85,12 @@ export class IAEngine extends UIElement {
         const textContent = includeTextContent ? ` ${element.textContent.trim()}` : '';
         return `${indent}<${tagName}${space}${attributes}>${textContent}`;
     }
-    static logElement(element, includeTextContent=false, indent='') {
-        console.log(IAEngine.abridgeElement(element, includeTextContent, indent));
+    static logElement(element, includeTextContent=false, indent='', appendage='') {
+        console.log(IAEngine.abridgeElement(element, includeTextContent, indent) + appendage);
     }
-    static verifyPrompt(prompt, script) {
+    static verifyPrompt(prompt, indent, script) {
         if (prompt.hasAttribute(IAEngine.ATTRIBUTE_FILE)) {
-            IAEngine.logElement(prompt, false, IAEngine.INDENT_TWO);
+            IAEngine.logElement(prompt, false, indent);
             return prompt;
         } else {
             const promptID = prompt.getAttribute(IAEngine.ATTRIBUTE_PROMPT_ID);
@@ -98,24 +98,24 @@ export class IAEngine extends UIElement {
             const sceneID = prompt.getAttribute(IAEngine.ATTRIBUTE_SCENE_ID);
             const promptPrefix = `Prompt "${prompt.getAttribute(IAEngine.ATTRIBUTE_ID)}"`;
             if (promptID && nodeID && sceneID) {
-                console.log(`${promptPrefix} attempting to reference another <${IAEngine.ELEMENT_PROMPT}> with ${IAEngine.ATTRIBUTE_PROMPT_ID}="${promptID}", ${IAEngine.ATTRIBUTE_NODE_ID}="${nodeID}", and ${IAEngine.ATTRIBUTE_SCENE_ID}="${sceneID}"...`);
+                console.log(`${indent}Referencing another <${IAEngine.ELEMENT_PROMPT}> with ${IAEngine.ATTRIBUTE_PROMPT_ID}="${promptID}", ${IAEngine.ATTRIBUTE_NODE_ID}="${nodeID}", and ${IAEngine.ATTRIBUTE_SCENE_ID}="${sceneID}"...`);
                 const node = IAEngine.getNodeFromString(nodeID, sceneID, script);
                 prompt = IAEngine.getChildElement(promptID, IAEngine.ELEMENT_PROMPT, node);
-                return this.verifyPrompt(prompt, script);
-            } else throw new Error(`${promptPrefix} does not have a "${IAEngine.ATTRIBUTE_FILE}" attribute nor does it have "${IAEngine.ATTRIBUTE_PROMPT_ID}", "${$IAEngine.ATTRIBUTE_NODE_ID}", and "${IAEngine.ATTRIBUTE_SCENE_ID}" reference attributes.`);
+                return this.verifyPrompt(prompt, indent, script);
+            } else throw new Error(`${promptPrefix} does not have a "${IAEngine.ATTRIBUTE_FILE}" attribute nor does it have "${IAEngine.ATTRIBUTE_PROMPT_ID}", "${IAEngine.ATTRIBUTE_NODE_ID}", and "${IAEngine.ATTRIBUTE_SCENE_ID}" reference attributes.`);
         }
     }
-    static verifyCondition(condition, indent, script) { // Verify the condition, which may have a parent that is a prompt, choice, or goto.
+    static verifyCondition(condition, indent, script) {//Verify the condition, which may have a parent that is a prompt, choice, or goto.
         if (condition.hasAttribute(IAEngine.ATTRIBUTE_VAR_ID) &&
             condition.hasAttribute(IAEngine.ATTRIBUTE_OPERATOR) &&
-            condition.hasAttribute(IAEngine.ATTRIBUTE_VALUE)) return condition;
+            condition.hasAttribute(IAEngine.ATTRIBUTE_VALUE)) return condition;//Logging is done elsewhere, so TRUE or FALSE may be added
         else {
             const conditionID = condition.getAttribute(IAEngine.ATTRIBUTE_CONDITION_ID);
             const nodeID = condition.getAttribute(IAEngine.ATTRIBUTE_NODE_ID);
             const sceneID = condition.getAttribute(IAEngine.ATTRIBUTE_SCENE_ID);
             const conditionPrefix = `Condition "${condition.getAttribute(IAEngine.ATTRIBUTE_ID)}"`;
             if (conditionID && nodeID && sceneID) {
-                console.log(`${indent}Attempting to reference another <${IAEngine.ELEMENT_CONDITION}> with ${IAEngine.ATTRIBUTE_CONDITION_ID}="${conditionID}", ${IAEngine.ATTRIBUTE_NODE_ID}="${nodeID}", and ${IAEngine.ATTRIBUTE_SCENE_ID}="${sceneID}"...`);
+                console.log(`${indent}Referencing another <${IAEngine.ELEMENT_CONDITION}> with ${IAEngine.ATTRIBUTE_CONDITION_ID}="${conditionID}", ${IAEngine.ATTRIBUTE_NODE_ID}="${nodeID}", and ${IAEngine.ATTRIBUTE_SCENE_ID}="${sceneID}"...`);
                 let parentID;
                 let parentType;
                 let grandParentID;
@@ -138,7 +138,7 @@ export class IAEngine extends UIElement {
                         parentType = IAEngine.ELEMENT_GOTO;
                         grandParentID = choiceID;
                         grandParentType = IAEngine.ELEMENT_CHOICE;
-                    } else throw new Error(`${conditionPrefix}'s reference was invalid because it does not have "${IAEngine.ATTRIBUTE_PROMPT_ID}", "${IAEngine.ATTRIBUTE_CHOICE_ID}", or "${IAEngine.ATTRIBUTE_GOTO_ID}" attributes.`);
+                    } else throw new Error(`${conditionPrefix}'s reference is invalid because it does not have "${IAEngine.ATTRIBUTE_PROMPT_ID}", "${IAEngine.ATTRIBUTE_CHOICE_ID}", or "${IAEngine.ATTRIBUTE_GOTO_ID}" attributes.`);
                 }
                 let grandparentXML = IAEngine.getNodeFromString(nodeID, sceneID, script);
                 if (grandParentID && grandParentType) grandparentXML = IAEngine.getChildElement(grandParentID, grandParentType, grandparentXML);
@@ -148,25 +148,25 @@ export class IAEngine extends UIElement {
             } else throw new Error(`${conditionPrefix} does not have "${IAEngine.ATTRIBUTE_VAR_ID}", "${IAEngine.ATTRIBUTE_OPERATOR}" and "${IAEngine.ATTRIBUTE_VALUE}" attributes nor does it have "${IAEngine.ATTRIBUTE_CONDITION_ID}", "${IAEngine.ATTRIBUTE_NODE_ID}", and "${IAEngine.ATTRIBUTE_SCENE_ID}" reference attributes.`);
         }
     }
-    static verifyModifyVar(modifyVar, script) {
+    static verifyModifyVar(modifyVar, indent, script) {
         if (modifyVar.hasAttribute(IAEngine.ATTRIBUTE_VAR_ID) && modifyVar.hasAttribute(IAEngine.ATTRIBUTE_COMMAND) && modifyVar.hasAttribute(IAEngine.ATTRIBUTE_VALUE)) {
-            //console.log(`Verified: ${modifyVar.outerHTML}`);
+            IAEngine.logElement(modifyVar, false, indent);
             return modifyVar;
         } else {
-            const modifyVarID = prompt.getAttribute(IAEngine.ATTRIBUTE_MODIFYVAR_ID);
-            const nodeID = prompt.getAttribute(IAEngine.ATTRIBUTE_NODE_ID);
-            const sceneID = prompt.getAttribute(IAEngine.ATTRIBUTE_SCENE_ID);
+            const modifyVarID = modifyVar.getAttribute(IAEngine.ATTRIBUTE_MODIFYVAR_ID);
+            const nodeID = modifyVar.getAttribute(IAEngine.ATTRIBUTE_NODE_ID);
+            const sceneID = modifyVar.getAttribute(IAEngine.ATTRIBUTE_SCENE_ID);
             const modifyVarPrefix = `ModifyVar "${modifyVar.getAttribute(IAEngine.ATTRIBUTE_ID)}"`;
             if (modifyVarID && nodeID && sceneID) {
-                console.log(`${modifyVarPrefix} attempting to reference another <${IAEngine.ELEMENT_MODIFYVAR}> with ${IAEngine.ATTRIBUTE_PROMPT_ID}="${modifyVarID}", ${IAEngine.ATTRIBUTE_NODE_ID}="${nodeID}", and ${IAEngine.ATTRIBUTE_SCENE_ID}="${sceneID}"...`);
+                console.log(`${indent}Referencing another <${IAEngine.ELEMENT_MODIFYVAR}> with ${IAEngine.ATTRIBUTE_MODIFYVAR_ID}="${modifyVarID}", ${IAEngine.ATTRIBUTE_NODE_ID}="${nodeID}", and ${IAEngine.ATTRIBUTE_SCENE_ID}="${sceneID}"...`);
                 let parentID;
                 let parentType;
-                const promptID = condition.getAttribute(IAEngine.ATTRIBUTE_PROMPT_ID);
+                const promptID = modifyVar.getAttribute(IAEngine.ATTRIBUTE_PROMPT_ID);
                 if (promptID) {
                     parentID = promptID;
                     parentType = IAEngine.ELEMENT_PROMPT;
                 } else {
-                    const choiceID = condition.getAttribute(IAEngine.ATTRIBUTE_CHOICE_ID);
+                    const choiceID = modifyVar.getAttribute(IAEngine.ATTRIBUTE_CHOICE_ID);
                     if (choiceID) {
                         parentID = choiceID;
                         parentType = IAEngine.ELEMENT_CHOICE;
@@ -175,8 +175,8 @@ export class IAEngine extends UIElement {
                 const node = IAEngine.getNodeFromString(nodeID, sceneID, script);
                 const parentXML = IAEngine.getChildElement(parentID, parentType, node);
                 modifyVar = IAEngine.getChildElement(modifyVarID, IAEngine.ELEMENT_MODIFYVAR, parentXML);
-                return this.verifyModifyVar(modifyVar, script);
-            } else throw new Error(`${modifyVarPrefix} does not have "${IAEngine.ATTRIBUTE_VAR_ID}", "${IAEngine.ATTRIBUTE_COMMAND}", and "${IAEngine.ATTRIBUTE_VALUE}" attributes nor does it have "${IAEngine.ATTRIBUTE_MODIFYVAR_ID}", "${$IAEngine.ATTRIBUTE_NODE_ID}", and "${IAEngine.ATTRIBUTE_SCENE_ID}" reference attributes.`);
+                return this.verifyModifyVar(modifyVar, indent, script);
+            } else throw new Error(`${modifyVarPrefix} does not have "${IAEngine.ATTRIBUTE_VAR_ID}", "${IAEngine.ATTRIBUTE_COMMAND}", and "${IAEngine.ATTRIBUTE_VALUE}" attributes nor does it have "${IAEngine.ATTRIBUTE_MODIFYVAR_ID}", "${IAEngine.ATTRIBUTE_NODE_ID}", and "${IAEngine.ATTRIBUTE_SCENE_ID}" reference attributes.`);
         }
     }
     static verifyChoice(choice, script) {
@@ -190,38 +190,37 @@ export class IAEngine extends UIElement {
             const sceneID = choice.getAttribute(IAEngine.ATTRIBUTE_SCENE_ID);
             const choicePrefix = `Choice "${choice.getAttribute(IAEngine.ATTRIBUTE_ID)}"`;
             if (choiceID && nodeID && sceneID) {
-                console.log(`${IAEngine.INDENT_TWO}Attempting to reference another <${IAEngine.ELEMENT_CHOICE}> with ${IAEngine.ATTRIBUTE_CHOICE_ID}="${choiceID}", ${IAEngine.ATTRIBUTE_NODE_ID}="${nodeID}", and ${IAEngine.ATTRIBUTE_SCENE_ID}="${sceneID}"...`);
+                console.log(`${IAEngine.INDENT_TWO}Referencing another <${IAEngine.ELEMENT_CHOICE}> with ${IAEngine.ATTRIBUTE_CHOICE_ID}="${choiceID}", ${IAEngine.ATTRIBUTE_NODE_ID}="${nodeID}", and ${IAEngine.ATTRIBUTE_SCENE_ID}="${sceneID}"...`);
                 const node = IAEngine.getNodeFromString(nodeID, sceneID, script);
                 choice = IAEngine.getChildElement(choiceID, IAEngine.ELEMENT_CHOICE, node);
                 return this.verifyChoice(choice, script);
-            } else throw new Error(`${choicePrefix} does not have any <${IAEngine.ELEMENT_GOTO}> children nor does it have "${IAEngine.ATTRIBUTE_CHOICE_ID}", "${$IAEngine.ATTRIBUTE_NODE_ID}", and "${IAEngine.ATTRIBUTE_SCENE_ID}" reference attributes.`);
+            } else throw new Error(`${choicePrefix} does not have any <${IAEngine.ELEMENT_GOTO}> children nor does it have "${IAEngine.ATTRIBUTE_CHOICE_ID}", "${IAEngine.ATTRIBUTE_NODE_ID}", and "${IAEngine.ATTRIBUTE_SCENE_ID}" reference attributes.`);
         }
     }
     static verifyGoto(goto, indent, script) { // Verify the goto, which may have a parent that is a node or a choice
         const gotoID = goto.getAttribute(IAEngine.ATTRIBUTE_GOTO_ID);
         const nodeID = goto.getAttribute(IAEngine.ATTRIBUTE_NODE_ID);
         const sceneID = goto.getAttribute(IAEngine.ATTRIBUTE_SCENE_ID);
-        if (!gotoID && (nodeID || sceneID)) {
+        if (!gotoID && (nodeID || sceneID)) {//If there is no gotoID, nodeID and sceneID are telling where to go
             this.logElement(goto, true, indent);
             return goto;
-        } else {
+        } else {//If there is a gotoID, nodeID and sceneID tell the parent of the referenced goto
             const gotoPrefix = `Goto "${goto.getAttribute(IAEngine.ATTRIBUTE_ID)}"`;
-            if (gotoID && nodeID && sceneID) {
-                console.log(`${gotoPrefix} attempting to reference another <${IAEngine.ELEMENT_GOTO}> with ${IAEngine.ATTRIBUTE_GOTO_ID}="${gotoID}", ${IAEngine.ATTRIBUTE_NODE_ID}="${nodeID}", and ${IAEngine.ATTRIBUTE_SCENE_ID}="${sceneID}"...`);
-                const targetParent = IAEngine.getNodeFromString(nodeID, sceneID, script);
-                const choiceID = goto.getAttribute(IAEngine.ATTRIBUTE_CHOICE_ID);
-                if (choiceID) targetParent = IAEngine.getChildElement(choiceID, IAEngine.ELEMENT_CHOICE, targetParent);
-                goto = IAEngine.getChildElement(gotoID, IAEngine.ELEMENT_GOTO, targetParent);
-                return this.verifyGoto(goto, sourceParent, script);
-            } else if (gotoID && !(nodeID && sceneID)) throw new Error(`${gotoPrefix}'s reference was invalid because it does not have a "${IAEngine.ATTRIBUTE_NODE_ID}", "${IAEngine.ATTRIBUTE_SCENE_ID}", or both.`);
-            else throw new Error(`${gotoPrefix} is invalid.`);
+            if (gotoID) {
+                if (nodeID && sceneID) {
+                    console.log(`${indent}Referencing another <${IAEngine.ELEMENT_GOTO}> with ${IAEngine.ATTRIBUTE_GOTO_ID}="${gotoID}", ${IAEngine.ATTRIBUTE_NODE_ID}="${nodeID}", and ${IAEngine.ATTRIBUTE_SCENE_ID}="${sceneID}"...`);
+                    let referenceParent = IAEngine.getNodeFromString(nodeID, sceneID, script);
+                    const choiceID = goto.getAttribute(IAEngine.ATTRIBUTE_CHOICE_ID);
+                    if (choiceID) referenceParent = IAEngine.getChildElement(choiceID, IAEngine.ELEMENT_CHOICE, referenceParent);
+                    goto = IAEngine.getChildElement(gotoID, IAEngine.ELEMENT_GOTO, referenceParent);
+                    return this.verifyGoto(goto, indent, script);
+                } else throw new Error(`${gotoPrefix}'s reference is invalid because it does not have a "${IAEngine.ATTRIBUTE_NODE_ID}" and "${IAEngine.ATTRIBUTE_SCENE_ID}".`);
+            } else throw new Error(`${gotoPrefix} does not have a "${IAEngine.ATTRIBUTE_NODE_ID}" or "${IAEngine.ATTRIBUTE_SCENE_ID}", nor does it have a "${IAEngine.ATTRIBUTE_GOTO_ID}" reference attribute.`);
         }
     }
     static evaluateXML(xml, indent, script, variables) {
         const conditionArray = Array.from(xml.children).filter(child => {return child.tagName === IAEngine.ELEMENT_CONDITION;});
-        const l = conditionArray.length;
-        for (let i=0; i<l; i++) {
-            let condition = conditionArray[i];
+        for (let condition of conditionArray) {
             condition = IAEngine.verifyCondition(condition, indent, script);
             const varID = condition.getAttribute(IAEngine.ATTRIBUTE_VAR_ID);
             const operator = condition.getAttribute(IAEngine.ATTRIBUTE_OPERATOR);
@@ -314,10 +313,10 @@ export class IAEngine extends UIElement {
             getVoVolume:this.getVoVolume, setVoVolume:this.setVoVolume,
             getBgmVolume:this.getBgmVolume, setBgmVolume:this.setBgmVolume,
             saveSettings: () => {saveLocalStorage(IAEngine.LOCAL_STORAGE_KEY, this.settings)},
-            replayLogic:this.replayLogic, pauseLogic:this.pauseLogic, playLogic:this.playLogic, skipLogic:this.skipLogic
+            replayCallback:this.replayCallback, pauseCallback:this.pauseCallback, playCallback:this.playCallback, skipCallback:this.skipCallback, seekCallback:this.seekCallback
         });
         this.appendChild(this.player);
-        this.branches = new IABranches({width:IAPlayer.PLAYER_WIDTH, top:IAPlayer.PLAYER_HEIGHT+10, onSelect:this.skipLogic});
+        this.branches = new IABranches({width:IAPlayer.PLAYER_WIDTH, top:IAPlayer.PLAYER_HEIGHT+11, onSelect:this.skipCallback});
         this.appendChild(this.branches);
         this.assetLoader = new AssetLoader({
             requestLogFunction: this.requestLog,
@@ -359,7 +358,7 @@ export class IAEngine extends UIElement {
         this.settings.bgmVolume = decimal;
         //this.audioManager.setTrackVolume(AudioManager.BGM, decimal);
     }
-    replayLogic = () => {
+    replayCallback = () => {
         const vo = this.voCurrent;
         const cleanVo = () => {
             vo.removeUpdateListener();
@@ -385,22 +384,24 @@ export class IAEngine extends UIElement {
             }
         } else replay();
     }
-    pauseLogic = () => {
+    pauseCallback = () => {
         this.player.pauseState();
         this.voCurrent.pause();
     }
-    playLogic = () => {
+    playCallback = () => {
         const vo = this.voCurrent;
-        if (vo) vo.play();
-        else this.playPromptVo();
+        if (vo) {
+            this.player.playState();
+            vo.play();
+        } else this.playPromptVo();
     }
-    skipLogic = (evt) => {
+    skipCallback = (evt) => {
         const vo = this.voCurrent;
         const skip = () => {
             vo.removeUpdateListener();
             vo.currentTime = 0;
             this.voCurrent = null;
-            if (evt) this.player.doneState();//evt exists if skipLogic was called by the skip button. If not, it was called by IABranches
+            if (evt) this.player.doneState();//evt exists if skipCallback was called by the skip button. If not, it was called by IABranches
             this.player.setPlayProgressToTotal();
             this.dispatchEventWith(IAEngine.COMPLETE_PLAY_PROMPT);
         }
@@ -410,6 +411,39 @@ export class IAEngine extends UIElement {
             if (vo.paused) skip();
             else AudioManager.fadeOutAudio(vo, 200, skip);
         }
+    }
+    seekCallback = (decimal) => {
+        const seekTime = decimal * this.totalTime;
+        const l = this.voArray.length;
+        let cumulativeDuration = 0;
+        let seekIndex = 0;
+        let voTime = seekTime;
+        if (l > 1) {
+            for (; seekIndex<l; seekIndex++) {
+                const vo = this.voArray[seekIndex];
+                const currentDuration = cumulativeDuration + vo.duration;
+                if (seekTime < currentDuration) {
+                    voTime = seekTime - cumulativeDuration;
+                    break;
+                } else cumulativeDuration = currentDuration;
+            }
+        }
+        const voSeek = this.voArray[seekIndex];
+        const voCurrent = this.voCurrent;
+        if (voCurrent) {
+            voCurrent.removeUpdateListener();
+            voCurrent.removeEndListener();
+            if (voCurrent !== voSeek) {
+                voCurrent.pause();
+                voCurrent.currentTime = 0;
+            }
+        }
+        this.promptIndex = seekIndex;
+        this.cumulativeTime = cumulativeDuration;
+        voSeek.currentTime = voTime;
+        this.player.setPlayProgress(decimal);
+        this.player.setProgressTime(seekTime);
+        this.playPromptVo();
     }
     exec() {
         this.addEventListener(IAEngine.COMPLETE_LOAD_SCRIPT, this.onLoadScript);
@@ -488,6 +522,10 @@ export class IAEngine extends UIElement {
         if (this.nextNodeName === null) this.nextNodeName = 'default';
         this.currentNode = IAEngine.getNodeFromXML(this.nextNodeName, this.currentScene);
         this.nextNodeName = null;
+        const sceneID = this.currentScene.getAttribute(IAEngine.ATTRIBUTE_ID);
+        const nodeID = this.currentNode.getAttribute(IAEngine.ATTRIBUTE_ID);
+        this.variables.incVar(`${sceneID}.${nodeID}`, 1);
+        IAEngine.logElement(this.currentNode, false, IAEngine.INDENT_ONE, ` - visit #${this.variables.getVar(`${sceneID}.${nodeID}`)}`);
         this.promptArray.length = this.choiceArray.length = 0;
         this.voCurrent = null;
         this.promptIndex = 0;
@@ -496,7 +534,6 @@ export class IAEngine extends UIElement {
         this.totalTime = 0;
         this.player.setLoadProgress(0);
         this.player.notReadyState();
-        IAEngine.logElement(this.currentNode, false, IAEngine.INDENT_ONE);
         this.prepParsePrompt();
     }
     disposeAudio() {
@@ -515,33 +552,23 @@ export class IAEngine extends UIElement {
         if (promptList.length > 0) {
             console.log(`${IAEngine.INDENT_ONE}Listing ALL <${IAEngine.ELEMENT_PROMPT}> children...`);
             promptList.forEach(prompt => {
-                prompt = IAEngine.verifyPrompt(prompt, this.script);
+                prompt = IAEngine.verifyPrompt(prompt, IAEngine.INDENT_TWO, this.script);
                 if (IAEngine.evaluateXML(prompt, IAEngine.INDENT_THREE, this.script, this.variables)) this.promptArray.push(prompt);
             });
-            const l = this.promptArray.length;
-            if (l > 0 ) {
+            if (this.promptArray.length > 0 ) {
                 console.log(`${IAEngine.INDENT_ONE}Listing TRUE <${IAEngine.ELEMENT_PROMPT}> children...`);
-                for (let i=0; i<l; i++) {
-                    prompt = this.promptArray[i];
+                this.promptArray.forEach(prompt => {
                     IAEngine.logElement(prompt, true, IAEngine.INDENT_TWO);
-                }
-                this.parseModifyArray(this.promptArray);
+                    this.parseModifyList(prompt, IAEngine.INDENT_THREE);
+                });
             } else console.log(`${IAEngine.INDENT_ONE}All <${IAEngine.ELEMENT_PROMPT}> children are false!`);
         } else console.log(`${IAEngine.INDENT_ONE}No <${IAEngine.ELEMENT_PROMPT}> children exist.`);
         this.dispatchEventWith(IAEngine.COMPLETE_PARSE_PROMPT);
     }
-    parseModifyArray(xmlArray) {
-        const sceneID = this.currentScene.getAttribute(IAEngine.ATTRIBUTE_ID);
-        const nodeID = this.currentNode.getAttribute(IAEngine.ATTRIBUTE_ID);
-        this.variables.incVar(`${sceneID}.${nodeID}`, 1);
-        xmlArray.forEach(xml => {
-            this.parseModifyList(xml);
-        });
-    }
-    parseModifyList(xml) {
+    parseModifyList(xml, indent) {
         const modifyVarList = xml.querySelectorAll(IAEngine.ELEMENT_MODIFYVAR);
         modifyVarList.forEach(modifyVar => {
-            modifyVar = IAEngine.verifyModifyVar(modifyVar, this.script);
+            modifyVar = IAEngine.verifyModifyVar(modifyVar, indent, this.script);
             const varID = modifyVar.getAttribute(IAEngine.ATTRIBUTE_VAR_ID);
             const command = modifyVar.getAttribute(IAEngine.ATTRIBUTE_COMMAND);
             const value = parseFloat(modifyVar.getAttribute(IAEngine.ATTRIBUTE_VALUE));
@@ -645,13 +672,9 @@ export class IAEngine extends UIElement {
                 choice = IAEngine.verifyChoice(choice, this.script);
                 if (IAEngine.evaluateXML(choice, IAEngine.INDENT_THREE, this.script, this.variables)) this.choiceArray.push(choice);
             });
-            const l = this.choiceArray.length;
-            if (l > 0) {
+            if (this.choiceArray.length > 0) {
                 console.log(`${IAEngine.INDENT_ONE}Listing TRUE <${IAEngine.ELEMENT_CHOICE}> children...`);
-                for (let i=0; i<l; i++) {
-                    const choice = this.choiceArray[i];
-                    IAEngine.logElement(choice, true, IAEngine.INDENT_TWO);
-                }
+                this.choiceArray.forEach(choice => {IAEngine.logElement(choice, true, IAEngine.INDENT_TWO);});
                 this.dispatchEventWith(IAEngine.COMPLETE_PARSE_CHOICE);
                 return;
             } else console.log(`${IAEngine.INDENT_ONE}All <${IAEngine.ELEMENT_CHOICE}> children are false!`);

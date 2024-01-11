@@ -1,5 +1,5 @@
 import { UIElement } from '../UserInterface_JS/UIElement.js';
-import { UIButtonHover } from '../UserInterface_JS/UIButton.js';
+import { UIButton } from '../UserInterface_JS/UIButton.js';
 import { ShadedRect, ShadedRectMenu, GlassPanel, RectButton, CircleButton,
          TriangleShadow, RimmedBar, DoubleProgressSeekBar, Slider, TransitionRect,
          RIM_HEX, SHADOW_UP_HEX, SHADOW_DOWN_HEX, ICON_UP_TOP_HEX, ICON_UP_BOTTOM_HEX, ICON_DOWN_TOP_HEX, ICON_DOWN_BOTTOM_HEX,
@@ -29,7 +29,7 @@ export class IAPlayer extends UIElement {
     constructor(options) {
         super();
         const {getMasterVolume, setMasterVolume, getVoVolume, setVoVolume, getBgmVolume, setBgmVolume, saveSettings,
-               replayLogic, pauseLogic, playLogic, skipLogic} = options;
+               replayCallback, pauseCallback, playCallback, skipCallback, seekCallback} = options;
         OptionsButton.getMasterVolume = getMasterVolume;
         OptionsButton.setMasterVolume = setMasterVolume;
         OptionsButton.getVoVolume = getVoVolume;
@@ -37,10 +37,6 @@ export class IAPlayer extends UIElement {
         OptionsButton.getBgmVolume = getBgmVolume;
         OptionsButton.setBgmVolume = setBgmVolume;
         OptionsButton.saveSettings = saveSettings;
-        this.replayLogic = replayLogic;
-        this.pauseLogic = pauseLogic;
-        this.playLogic = playLogic;
-        this.skipLogic = skipLogic;
         const titleGlassLeft = 52;
         const titleGlassWidth = IAPlayer.PLAYER_WIDTH - titleGlassLeft*2;
         const sceneGlassLeft = 108;
@@ -62,14 +58,14 @@ export class IAPlayer extends UIElement {
         const createRectButtons = () => {
             const rectButton = IAPlayer.rectButton;
             this.infoButton = new InfoButton({
-                execFunction: this.infoCallback,
+                execFunction: (infoButton) => {IAEngine.popup(infoButton, infoButton.menu);},
                 width: rectButton.width,
                 height: rectButton.height,
                 left: rectButton.left,
                 top: rectButton.top
             });
             this.optionsButton = new OptionsButton({
-                execFunction: this.optionsCallback,
+                execFunction: (optionsButton) => {IAEngine.popup(optionsButton, optionsButton.menu);},
                 width: rectButton.width,
                 height: rectButton.height,
                 left: IAPlayer.PLAYER_WIDTH - rectButton.width - rectButton.left,
@@ -81,25 +77,25 @@ export class IAPlayer extends UIElement {
         const createCircleButtons = () => {
             const diameter = 48;
             this.replayButton = new ReplayButton({
-                execFunction: this.replayCallback,
+                execFunction: replayCallback,
                 diameter,
                 left: circleButtonLeft,
                 top: circleButtonTop
             });
             this.pauseButton = new PauseButton({
-                execFunction: this.pauseCallback,
+                execFunction: pauseCallback,
                 diameter,
                 left: circleButtonLeft * 2 + diameter,
                 top: circleButtonTop
             });
             this.playButton = new PlayButton({
-                execFunction: this.playCallback,
+                execFunction: playCallback,
                 diameter,
                 left: IAPlayer.PLAYER_WIDTH - circleButtonLeft * 2 - diameter * 2,
                 top: circleButtonTop
             });
             this.skipButton = new SkipButton({
-                execFunction: this.skipCallback,
+                execFunction: skipCallback,
                 diameter,
                 left: IAPlayer.PLAYER_WIDTH - circleButtonLeft - diameter,
                 top: circleButtonTop
@@ -107,10 +103,11 @@ export class IAPlayer extends UIElement {
         }
         const createSeekBar = () => {
             this.doubleProgressSeekBar = new DoubleProgressSeekBar({
-                width: sceneGlassWidth - 4,
+                width: sceneGlassWidth,
                 height: 6,
-                left: sceneGlassLeft + 2,
-                top: circleButtonTop + 30
+                left: sceneGlassLeft,
+                top: circleButtonTop + 30,
+                seekCallback: seekCallback
             });
         }
         const createText = () => {
@@ -129,17 +126,19 @@ export class IAPlayer extends UIElement {
             });
             iae.style.textShadow = '1px 1px 0px #ffffff';
             iae.style.overflow = 'visible';
-            this.iae = new UIButtonHover(iae, null, this.iaeCallback);
+            this.iae = new UIButton(iae, null, (iae) => {IAEngine.popup(this.iae, this.credits);});
             this.iae.buttonDimensions = iaeDimensions;
+            this.iae.addMouseListeners();
             this.iae.enable();
+            const timeTop = IAPlayer.PLAYER_HEIGHT - 14;
             this.progressText = new TextField({
                 text: '--:--',
                 fontFamily: 'Consolas, monospace',
                 fontSize: 10,
                 textAlign: 'left',
                 color: '#000000',
-                left: sceneGlassLeft + 2,
-                top: IAPlayer.PLAYER_HEIGHT - 14
+                left: sceneGlassLeft,
+                top: timeTop
             });
             this.totalText = new TextField({
                 text: '--:--',
@@ -147,8 +146,8 @@ export class IAPlayer extends UIElement {
                 fontSize: 10,
                 textAlign: 'right',
                 color: '#000000',
-                right: sceneGlassLeft + 2,
-                top: IAPlayer.PLAYER_HEIGHT - 14
+                right: sceneGlassLeft,
+                top: timeTop
             });
         }
         createBackground();
@@ -183,12 +182,13 @@ export class IAPlayer extends UIElement {
     setPlayProgressToTotal() {this.setPlayProgress(100); this.progressText.text = this.totalText.text;}
     setLoadProgress(decimal) {this.doubleProgressSeekBar.setProgressRear(decimal);}
     setPlayProgress(decimal) {this.doubleProgressSeekBar.setProgressFront(decimal);}
-    cleanText(text) {return text.replace(/\n/g, '');} // Replace carriage returns with nothing.
+    cleanText(text) {return text.replace(/\n/g, '');}//Replace carriage returns with nothing.
     notReadyState() {
         this.replayButton.disable();
         this.pauseButton.disable();
         this.playButton.disable();
         this.skipButton.disable();
+        this.doubleProgressSeekBar.disable();
     }
     firstReadyState() {
         this.playButton.enable();
@@ -198,19 +198,18 @@ export class IAPlayer extends UIElement {
         this.pauseButton.enable();
         this.playButton.disable();
         this.skipButton.enable();
+        this.doubleProgressSeekBar.enable();
     }
     pauseState() {
         this.pauseButton.disable();
         this.playButton.enable();
     }
     doneState() {
+        this.doubleProgressSeekBar.enable();
         this.replayButton.enable();
         this.pauseButton.disable();
         this.playButton.disable();
         this.skipButton.disable();
-    }
-    iaeCallback = (iae) => {
-        IAEngine.popup(this.iae, this.credits);
     }
     get credits() {
         if (this._credits === undefined) {
@@ -270,28 +269,6 @@ export class IAPlayer extends UIElement {
             this._credits.appendChild(subscribestarAnchor);
         }
         return this._credits;
-    }
-    infoCallback = (infoButton) => {
-        IAEngine.popup(infoButton, infoButton.menu);
-    }
-    optionsCallback = (optionsButton) => {
-        IAEngine.popup(optionsButton, optionsButton.menu);
-    }
-    replayCallback = () => {
-        this.playState();
-        this.replayLogic();
-    }
-    pauseCallback = () => {
-        this.pauseState();
-        this.pauseLogic();
-    }
-    playCallback = () => {
-        this.playState();
-        this.playLogic();
-    }
-    skipCallback = (evt) => {
-        this.doneState();
-        this.skipLogic(evt);
     }
 }
 
@@ -398,7 +375,18 @@ class OptionsButton extends RectButton {
     static _menu = undefined;
     constructor(options) {
         super(options);
-        const barLeft = 11;
+        this.default = {color:ICON_UP_BOTTOM_HEX, textShadow: `0px 1px ${RIM_HEX}`, top:'-6%'};
+        this.alt = {color:ICON_DOWN_BOTTOM_HEX, textShadow: `0px 1px ${SHADOW_DOWN_HEX}`, top:`calc(-6% + ${ALT_DELTA}px)`};
+        this.iLetter = new TextField({
+            ...this.default,
+            text: '≡',
+            height: options.height,
+            fontFamily: '"Verdana", sans-serif',
+            fontSize: 26,
+            left: '50%',
+            transform: 'translate(-50%, 0%) scaleX(1.28)'
+        });
+        /*const barLeft = 11;
         const barWidth = options.width - barLeft*2 - 1;
         const barHeight = 3;
         const barGap = barHeight + 2;
@@ -419,7 +407,8 @@ class OptionsButton extends RectButton {
         this.thirdBar = new RimmedBar({...hBarInit, ...this.defaultThird});
         this.pointerElement.appendChild(this.firstBar);
         this.pointerElement.appendChild(this.secondBar);
-        this.pointerElement.appendChild(this.thirdBar);
+        this.pointerElement.appendChild(this.thirdBar);*/
+        this.pointerElement.appendChild(this.iLetter);
     }
     get menu() {
         if (OptionsButton._menu === undefined) {
@@ -464,15 +453,17 @@ class OptionsButton extends RectButton {
     }
     downState() {
         super.downState();
-        this.firstBar.assignStyles(this.altFirst);
+        this.iLetter.assignStyles(this.alt);
+        /*this.firstBar.assignStyles(this.altFirst);
         this.secondBar.assignStyles(this.altSecond);
-        this.thirdBar.assignStyles(this.altThird);
+        this.thirdBar.assignStyles(this.altThird);*/
     }
     upState() {
         super.upState();
-        this.firstBar.assignStyles(this.defaultFirst);
+        this.iLetter.assignStyles(this.default);
+        /*this.firstBar.assignStyles(this.defaultFirst);
         this.secondBar.assignStyles(this.defaultSecond);
-        this.thirdBar.assignStyles(this.defaultThird);
+        this.thirdBar.assignStyles(this.defaultThird);*/
     }
 }
 

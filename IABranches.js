@@ -31,7 +31,7 @@ export class IABranches extends UIElement {
         }
         for (let i=0; i<l; i++) {
             const choiceButton = this.buttonArray[i];
-            const top = (ChoiceButton.choiceStyle.height + 10 ) * i;
+            const top = (ChoiceButton.choiceStyle.height + 12 ) * i;
             choiceButton.assignStyles({top});
             this.appendChild(choiceButton);
             Tween.tweenOpacity(choiceButton, 1, .4, testDisplayed, i*.1);
@@ -89,14 +89,14 @@ class ChoiceButton extends Button3State {
     }
     constructor(choice, onChoice) {
         const {width, height, left, top} = ChoiceButton.choiceStyle;
-        const glassWidth = width - height;
+        const glassWidth = width - height - 4;
         const halfHeight = height / 2;
         const container = new UIElement();
         const shadedArrowBar = new ShadedArrowBar({width, height});
         const glassPanel = new GlassPanel({
             width:glassWidth, height:22, colorString:GlassPanel.PURPLE, level:GlassPanel.LOW,
             fontFamily:'Consolas, monospace', fontSize:18, textTop:-11,
-            left:halfHeight, top:11
+            left:halfHeight+2, top:12
         });
         container.appendChild(shadedArrowBar)
         container.appendChild(glassPanel);
