@@ -236,7 +236,7 @@ export class IAPlayer extends UIElement {
             const logoTop = 10;
             const patreonImg = new UIElement(UIElement.IMG);
             patreonImg.assignStyles({left:logoMargin, top:logoTop});
-            patreonImg._element.src = '../../JavaScript/InteractiveAudio_JS/patreon.svg';
+            patreonImg._element.src = 'JavaScript/InteractiveAudio_JS/patreon.svg';
             patreonImg._element.alt = 'Patreon logo';
             patreonImg._element.width = patreonImg._element.height = logoSide;
             patreonImg.enable();
@@ -253,7 +253,7 @@ export class IAPlayer extends UIElement {
             subscribestarAnchor._element.target = '_blank';
             const subscribestarImg = new UIElement(UIElement.IMG);
             subscribestarImg.assignStyles({right:logoMargin, top:logoTop});
-            subscribestarImg._element.src = '../../JavaScript/InteractiveAudio_JS/subscribestar.svg';
+            subscribestarImg._element.src = 'JavaScript/InteractiveAudio_JS/subscribestar.svg';
             subscribestarImg._element.alt = 'SubscribeStar logo';
             subscribestarImg._element.width = subscribestarImg._element.height = logoSide;
             subscribestarImg.enable();
