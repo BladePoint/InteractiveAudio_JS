@@ -111,23 +111,21 @@ export class IAPlayer extends UIElement {
             });
         }
         const createText = () => {
-            const iaeDimensions = {width:117, height:11, left:(IAPlayer.PLAYER_WIDTH - 117)/2, top:2};
             const iae = new TextField({
                 text: 'Interactive Audio Engine',
-                width: iaeDimensions.width,
-                height: iaeDimensions.height,
+                width: 117,
+                height: 11,
                 fontFamily: 'Arial, sans-serif',
                 fontWeight: 'bold',
                 fontSize: 10,
                 color: '#000000',
                 textAlign: 'center',
-                left: iaeDimensions.left,
-                top: iaeDimensions.top
+                left: (IAPlayer.PLAYER_WIDTH - 117)/2,
+                top: 2
             });
             iae.style.textShadow = '1px 1px 0px #ffffff';
             iae.style.overflow = 'visible';
             this.iae = new UIButton(iae, null, (iae) => {IAEngine.popup(this.iae, this.credits);});
-            this.iae.buttonDimensions = iaeDimensions;
             this.iae.addMouseListeners();
             this.iae.enable();
             const timeTop = IAPlayer.PLAYER_HEIGHT - 14;
